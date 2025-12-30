@@ -278,7 +278,29 @@ export const assetStorage = {
     },
 
     // Delete an asset
-    async deleteAsset(id: string): Promise<boolean> {
+    async deleteAsset(id: string, imageUrl?: string): Promise<boolean> {
+        // 1. Delete from Storage if it's a Supabase URL
+        if (imageUrl && imageUrl.includes('/generated-assets/')) {
+            try {
+                const path = imageUrl.split('/generated-assets/')[1];
+                if (path) {
+                    const { error: storageError } = await supabase.storage
+                        .from('generated-assets')
+                        .remove([path]);
+
+                    if (storageError) {
+                        console.warn('Failed to delete file from storage:', storageError);
+                        // Continue to delete DB record anyway
+                    } else {
+                        console.log('Deleted file from storage:', path);
+                    }
+                }
+            } catch (err) {
+                console.warn('Error deleting file from storage:', err);
+            }
+        }
+
+        // 2. Delete from Database
         const { error } = await supabase
             .from('assets')
             .delete()

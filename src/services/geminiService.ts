@@ -86,10 +86,22 @@ const imageToBase64 = async (urlOrBase64: string): Promise<string> => {
 };
 
 // Helper to resize and compress image to reduce payload size
-const optimizeImage = async (base64Str: string, maxWidth = 1024): Promise<string> => {
+const optimizeImage = async (inputStr: string, maxWidth = 1024): Promise<string> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.src = `data:image/jpeg;base64,${base64Str}`;
+    // Enable CORS for external URLs (Supabase)
+    img.crossOrigin = 'Anonymous';
+
+    // Handle both Base64 (raw or with prefix) and URLs
+    if (inputStr.startsWith('http')) {
+      img.src = inputStr;
+    } else if (inputStr.startsWith('data:')) {
+      img.src = inputStr;
+    } else {
+      // Assume raw base64
+      img.src = `data:image/jpeg;base64,${inputStr}`;
+    }
+
     img.onload = () => {
       const canvas = document.createElement('canvas');
       let width = img.width;
@@ -110,12 +122,20 @@ const optimizeImage = async (base64Str: string, maxWidth = 1024): Promise<string
       }
 
       // Draw and compress
-      ctx.drawImage(img, 0, 0, width, height);
-      // specific JPEG compression to reduce size
-      const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      resolve(optimizedDataUrl.split('base64,')[1]);
+      try {
+        ctx.drawImage(img, 0, 0, width, height);
+        // specific JPEG compression to reduce size
+        const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        resolve(optimizedDataUrl.split('base64,')[1]);
+      } catch (err) {
+        reject(new Error('Canvas export failed (likely CORS issue): ' + err));
+      }
     };
-    img.onerror = (e) => reject(new Error('Image optimization failed to load source'));
+
+    img.onerror = (e) => {
+      console.error('Image Load Error:', e);
+      reject(new Error('Image optimization failed to load source. Check if URL is valid.'));
+    };
   });
 };
 

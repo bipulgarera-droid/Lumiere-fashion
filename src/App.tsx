@@ -53,6 +53,8 @@ const App: React.FC = () => {
 
   // New State: Preserve Mode
   const [preserveOriginal, setPreserveOriginal] = useState<boolean>(false);
+  // New State: High Fidelity Mode (Color Accuracy)
+  const [highFidelityMode, setHighFidelityMode] = useState<boolean>(false);
 
   // Camera & Pose Controls (Left Sidebar - Global)
   const [selectedAngle, setSelectedAngle] = useState<CameraAngle>('eye-level');
@@ -80,6 +82,10 @@ const App: React.FC = () => {
 
   // Saved model for consistency (from Supabase)
   const [savedReferenceModel, setSavedReferenceModel] = useState<ReferenceModel>(null);
+
+  // Selection Mode State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -231,6 +237,15 @@ const App: React.FC = () => {
 
       // 2. Construct Prompt (Now that we know if we have the image)
       let fullPrompt = '';
+
+      // High Fidelity Styles (Only used if mode is ON)
+      const highFiStyle = `STYLE: Modern High-End Digital Photography. Phase One XF IQ4 150MP, 80mm f/2.8 lens.
+           LIGHTING: Professional Studio Lighting. Softbox lighting setup, neutral 5600K white balance.
+           COLOR: 100% ACCURATE COLOR REPRODUCTION. Do not apply vintage filters, do not color grade, do not add film grain. 
+           The color of the garment must match the input image HEX code exactly. High fidelity textures.`;
+
+      const highFiAvoid = 'Avoid: Color shifting, vintage tints, cloudy haze, low contrast.';
+
       if (preserveOriginal) {
         // Mode: Preserve original subject/bg, just change camera params
         fullPrompt = `
@@ -242,7 +257,11 @@ const App: React.FC = () => {
           
           CRITICAL: Do NOT change the model's identity or the environment. Only adjust the camera perspective and framing as requested above.
           
-          STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture.
+          ${highFidelityMode
+            ? highFiStyle
+            : `STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture.
+           Avoid: film borders, film frame, white border, black border, text, watermarks.`
+          }
           ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
         `.trim();
       } else {
@@ -266,8 +285,15 @@ const App: React.FC = () => {
            
            SETTING: ${selectedSetting?.description}.
            
-           STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture, unretouched aesthetic, depth of field. 
-           Avoid: CGI, airbrushed, artificial lighting, plastic skin, over-sharpened, commercial catalog look.
+           ${highFidelityMode
+            ? highFiStyle
+            : 'STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture, unretouched aesthetic, depth of field.'
+          }
+           
+           ${highFidelityMode
+            ? highFiAvoid
+            : 'Avoid: film borders, film frame, white border, black border, text, watermarks, branding, CGI, airbrushed, artificial lighting, plastic skin, over-sharpened, commercial catalog look.'
+          }
            ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
          `.trim();
       }
@@ -568,6 +594,58 @@ const App: React.FC = () => {
     setCustomPrompt(asset.customPrompt);
   };
 
+  // Toggle selection of an asset
+  const toggleAssetSelection = (assetId: string) => {
+    const newSet = new Set(selectedAssetIds);
+    if (newSet.has(assetId)) {
+      newSet.delete(assetId);
+    } else {
+      newSet.add(assetId);
+    }
+    setSelectedAssetIds(newSet);
+  };
+
+  // Handle asset click based on mode
+  const handleAssetClick = (asset: GeneratedAsset) => {
+    if (isSelectionMode) {
+      if (asset.id) toggleAssetSelection(asset.id);
+    } else {
+      setActiveAsset(asset);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedAssetIds.size === 0) return;
+
+    if (window.confirm(`Are you sure you want to delete ${selectedAssetIds.size} images? This cannot be undone.`)) {
+      // 1. Optimistic Update
+      const idsToDelete = Array.from(selectedAssetIds);
+      setGeneratedAssets(prev => prev.filter(a => !selectedAssetIds.has(a.id)));
+
+      // If active asset is deleted, clear it
+      if (activeAsset && selectedAssetIds.has(activeAsset.id)) {
+        setActiveAsset(null);
+      }
+
+      // 2. Clear selection mode
+      setIsSelectionMode(false);
+      setSelectedAssetIds(new Set());
+
+      // 3. Perform Deletions
+      try {
+        // We need to find the full asset objects to get URLs for storage deletion
+        const assetsToDelete = generatedAssets.filter(a => idsToDelete.includes(a.id));
+
+        await Promise.all(assetsToDelete.map(asset =>
+          assetStorage.deleteAsset(asset.id, asset.imageUrl)
+        ));
+      } catch (error) {
+        console.error("Bulk delete failed:", error);
+        alert("Some images may not have been deleted from the server. Please refresh.");
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-brand-950 text-brand-100 font-sans overflow-hidden">
       <DebugConsole />
@@ -666,6 +744,33 @@ const App: React.FC = () => {
                   </span>
                   <span className="text-[10px] text-brand-500 leading-tight">
                     Disable model/setting changes. Only adjust camera.
+                  </span>
+                </div>
+              </label>
+
+              {/* High Fidelity Mode Toggle */}
+              <label
+                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 mt-2 ${highFidelityMode
+                  ? 'bg-indigo-500/10 border-indigo-500/30'
+                  : 'bg-white/5 border-white/5 hover:bg-white/10'
+                  }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${highFidelityMode ? 'bg-indigo-500 border-indigo-500' : 'border-white/30'
+                    }`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setHighFidelityMode(!highFidelityMode);
+                  }}
+                >
+                  {highFidelityMode && <Check size={14} className="text-white" strokeWidth={3} />}
+                </div>
+                <div className="flex flex-col">
+                  <span className={`text-xs font-bold ${highFidelityMode ? 'text-indigo-400' : 'text-brand-200'}`}>
+                    High Fidelity Mode
+                  </span>
+                  <span className="text-[10px] text-brand-500 leading-tight">
+                    Strict color accuracy. Reduces artistic styling to preserve garment details.
                   </span>
                 </div>
               </label>
@@ -1048,19 +1153,55 @@ const App: React.FC = () => {
 
           {/* Bottom Gallery Strip */}
           <div className="h-28 md:h-36 bg-brand-950 border-t border-brand-800 flex flex-col shrink-0 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
-            <div className="flex items-center border-b border-brand-800 px-2 bg-brand-950">
-              <button
-                onClick={() => setActiveTab('all')}
-                className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'all' ? 'border-brand-400 text-white' : 'border-transparent text-brand-500 hover:text-brand-300'}`}
-              >
-                <History size={12} /> Session ({generatedAssets.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('shortlist')}
-                className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'shortlist' ? 'border-brand-400 text-white' : 'border-transparent text-brand-500 hover:text-brand-300'}`}
-              >
-                <Heart size={12} /> Shortlist ({generatedAssets.filter(a => a.isShortlisted).length})
-              </button>
+            <div className="flex items-center justify-between border-b border-brand-800 px-2 bg-brand-950">
+
+              {/* Left: TABS */}
+              <div className="flex items-center">
+                <button
+                  onClick={() => setActiveTab('all')}
+                  className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'all' ? 'border-brand-400 text-white' : 'border-transparent text-brand-500 hover:text-brand-300'}`}
+                >
+                  <History size={12} /> Session ({generatedAssets.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('shortlist')}
+                  className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'shortlist' ? 'border-brand-400 text-white' : 'border-transparent text-brand-500 hover:text-brand-300'}`}
+                >
+                  <Heart size={12} /> Shortlist ({generatedAssets.filter(a => a.isShortlisted).length})
+                </button>
+              </div>
+
+              {/* Right: ACTIONS (Select Mode) */}
+              <div className="flex items-center gap-2 pr-2">
+                {!isSelectionMode ? (
+                  <button
+                    onClick={() => setIsSelectionMode(true)}
+                    className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-400 hover:text-white border border-brand-800 hover:border-brand-600 rounded flex items-center gap-1 transition-all"
+                  >
+                    Select
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setIsSelectionMode(false);
+                        setSelectedAssetIds(new Set());
+                      }}
+                      className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-500 hover:text-brand-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    {selectedAssetIds.size > 0 && (
+                      <button
+                        onClick={handleBulkDelete}
+                        className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white rounded flex items-center gap-1 transition-all"
+                      >
+                        <Trash2 size={10} /> Delete ({selectedAssetIds.size})
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-x-auto p-3 flex gap-3 items-center custom-scrollbar bg-brand-900/30">
@@ -1073,8 +1214,10 @@ const App: React.FC = () => {
                   <AssetCard
                     key={asset.id}
                     asset={asset}
-                    onSelect={setActiveAsset}
+                    onSelect={handleAssetClick}
                     isActive={activeAsset?.id === asset.id}
+                    selectionMode={isSelectionMode}
+                    isSelected={selectedAssetIds.has(asset.id)}
                   />
                 ))
               )}
