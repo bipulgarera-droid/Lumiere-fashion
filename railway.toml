@@ -3,10 +3,5 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "npm run start"
 healthcheckPath = "/"
 healthcheckTimeout = 300
-
-[[services]]
-name = "web"
-internalPort = 4173
