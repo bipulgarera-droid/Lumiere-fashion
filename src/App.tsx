@@ -973,8 +973,9 @@ const App: React.FC = () => {
         const fontSize = Math.round(img.width * 0.04);
         ctx.font = `700 ${fontSize}px "Inter", sans-serif`;
         ctx.fillStyle = overlayTextColor;
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 4;
+        // Shadow removed for cleaner look as per user request
+        // ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        // ctx.shadowBlur = 4;
 
         // Split into lines ONLY if > 16 chars
         let line1 = overlayProductName;
@@ -991,8 +992,9 @@ const App: React.FC = () => {
         productNameBottomY = textY; // Bottom of first line roughly
 
         if (line2) {
-          ctx.fillText(line2, textX, textY + fontSize * 1.2);
-          productNameBottomY = textY + fontSize * 1.2;
+          // Tighter line height (1.1x instead of 1.2x)
+          ctx.fillText(line2, textX, textY + fontSize * 1.1);
+          productNameBottomY = textY + fontSize * 1.1;
         }
       }
 
@@ -1002,10 +1004,11 @@ const App: React.FC = () => {
         const subheaderSize = Math.round(img.width * 0.025); // Smaller than title
         ctx.font = `400 ${subheaderSize}px "Inter", sans-serif`; // Regular weight
         ctx.fillStyle = overlayTextColor;
-        ctx.shadowBlur = 3;
+        // ctx.shadowBlur = 3; // Removed shadow
 
         // Position below product name
-        const spacing = overlayProductName ? Math.round(img.width * 0.06) : 0;
+        // TIGHTER SPACING: (0.06 -> 0.035)
+        const spacing = overlayProductName ? Math.round(img.width * 0.035) : 0;
         subheaderBottomY = productNameBottomY + spacing;
 
         ctx.fillText(overlaySubheader, textX, subheaderBottomY);
@@ -1014,11 +1017,14 @@ const App: React.FC = () => {
       // 7. Draw prices (if provided)
       if (overlaySalePrice || overlayOriginalPrice) {
         const priceSize = Math.round(img.width * 0.035);
-        ctx.shadowBlur = 3;
+        // ctx.shadowBlur = 3; // Removed shadow
 
         // Calculate Y position based on what's above it
         // If subheader exists, add small gap. If not, add gap from title.
-        const gap = overlaySubheader ? Math.round(img.width * 0.04) : Math.round(img.width * 0.05); // Tighter if subheader is empty
+        // TIGHTER SPACING:
+        // Gap from Subheader: 0.04 -> 0.025
+        // Gap from Title (if no subheader): 0.05 -> 0.04
+        const gap = overlaySubheader ? Math.round(img.width * 0.025) : Math.round(img.width * 0.04);
         const priceY = subheaderBottomY + gap; // Use the tracked bottom Y
 
         if (overlayOriginalPrice && overlaySalePrice) {
