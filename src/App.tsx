@@ -262,7 +262,7 @@ const App: React.FC = () => {
     switch (angle) {
       case 'eye-level': return "EYE LEVEL, camera positioned at the subject's eye height, horizontally straight - NOT looking up, NOT looking down";
       case 'low-angle': return "LOW ANGLE, camera placed BELOW the subject looking UP at them, worm's-eye perspective";
-      case 'high-angle': return "HIGH ANGLE, camera placed ABOVE the subject looking DOWN at them, bird's-eye perspective";
+      case 'high-angle': return "EXTREME HIGH ANGLE, camera placed SIGNIFICANTLY ABOVE the subject looking DOWN at them. Bird's-eye perspective. The floor must be clearly visible behind/around the subject.";
       case 'side-angle': return "SIDE PROFILE, 90-degree lateral view of the subject, profile silhouette";
       default: return "EYE LEVEL, camera at subject's eye height, horizontally straight";
     }
@@ -336,16 +336,15 @@ const App: React.FC = () => {
       - EXACT TEXTURE: Preserve fabric weave, leather grain, surface detail, sheen, and material properties.
       - EXACT STRUCTURE: Maintain the garment's construction, seams, stitching, and hardware.
       
-      CRITICAL - FIT & SILHOUETTE:
-      - You MUST strictly derive the fit from the reference.
-      - if the pants are TAPERED, keep them TAPERED.
-      - If they are WIDE LEG, keep them WIDE.
-      - If they form a CURVED/BALLOON shape, preserve that EXACT CURVE.
-      - Do not genericize the fit. Do not flatten unique cuts.
+      CRITICAL - FIT & SILHOUETTE (ABSOLUTE PRIORITY):
+      - The fit/cut from the reference image is IMMUTABLE. It must not change.
+      - UNIVERSAL CONSISTENCY: Regardless of the new setting, pose, or lighting, the garment's shape must remain identical.
+      - If it is loose/oversized, it MUST look loose/oversized.
+      - If it is tapered/structural, it MUST look tapered/structural.
       
-      CRITICAL - VOLUME & DRAPE:
-      - Preserve how the fabric hangs. Heavy fabric must hang heavily; stiff fabric must hold its shape.
-      - Respect the volume of the garment. Do not make baggy clothes tight, or tight clothes loose.
+      NATURAL INTEGRATION:
+      - The garment must sit naturally on the model's body (respect gravity and physics). 
+      - It must NOT look "abnormal" or "pasted on". It must fit the model realistically while maintaining its original cut.
       
       This is the single most important requirement. The product IS what is being photographed.
     `.trim();
@@ -588,7 +587,11 @@ const App: React.FC = () => {
       PRODUCT INTEGRITY (NON-NEGOTIABLE):
       The product (garment, accessory, shoes) must be reproduced with EXACT fidelity:
       - EXACT COLOR, EXACT TEXTURE, EXACT PATTERN.
-      - EXACT FIT & SILHOUETTE: Preserve the specific cut (e.g., balloon, tapered, wide). Do not alter the fit.
+      - EXACT FIT & SILHOUETTE (ABSOLUTE PRIORITY): The cut from the reference is IMMUTABLE.
+        - UNIVERSAL CONSISTENCY: Regardless of the aspect ratio change, the garment's shape must remain identical.
+        - If it is loose/oversized, it MUST look loose/oversized.
+        - If it is tapered/structural, it MUST look tapered/structural.
+      - NATURAL INTEGRATION: It must drape naturally on the model.
       - EXACT VOLUME: Maintain the fabric weight and drape.
       
       RULES:
@@ -755,7 +758,11 @@ const App: React.FC = () => {
       PRODUCT INTEGRITY (NON-NEGOTIABLE):
       The product (garment, accessory, shoes) must be reproduced with EXACT fidelity:
       - EXACT COLOR, EXACT TEXTURE, EXACT PATTERN.
-      - EXACT FIT & SILHOUETTE: Preserve the specific cut (e.g., balloon, tapered, wide). Do not alter the fit.
+      - EXACT FIT & SILHOUETTE (ABSOLUTE PRIORITY): The cut from the reference is IMMUTABLE.
+        - UNIVERSAL CONSISTENCY: Regardless of the new angle/pose, the garment's shape must remain identical.
+        - If it is loose/oversized, it MUST look loose/oversized.
+        - If it is tapered/structural, it MUST look tapered/structural.
+      - NATURAL INTEGRATION: It must drape naturally on the model.
       - EXACT VOLUME: Maintain the fabric weight and drape.
       
       PRESERVE:
