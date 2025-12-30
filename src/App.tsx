@@ -1782,11 +1782,28 @@ const App: React.FC = () => {
                       {/* Typography Row (NEW) */}
                       <div className="flex gap-2">
                         {/* Font Size */}
-      // 5. Calculate Font Settings
-                        // Base scale: 12 is the "standard" (1.0x)
-                        const fontScale = overlayFontSize / 12;
-
-                        const fontFamilyStr = `"${overlayFontFamily}", sans-serif`;
+                        <div className="flex-1">
+                          <label className="text-[10px] text-brand-400 block mb-1">Font Size</label>
+                          <div className="flex bg-brand-950 border border-brand-600 rounded overflow-hidden">
+                            {/* Small */}
+                            <button
+                              onClick={() => setOverlayFontSize('small')}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'small' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                            >Sm</button>
+                            <div className="w-[1px] bg-brand-800"></div>
+                            {/* Medium */}
+                            <button
+                              onClick={() => setOverlayFontSize('medium')}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'medium' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                            >Md</button>
+                            <div className="w-[1px] bg-brand-800"></div>
+                            {/* Large */}
+                            <button
+                              onClick={() => setOverlayFontSize('large')}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'large' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                            >Lg</button>
+                          </div>
+                        </div>
 
                         {/* Font Family */}
                         <div className="flex-[1.5]">
