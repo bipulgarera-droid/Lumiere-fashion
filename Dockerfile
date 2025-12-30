@@ -10,17 +10,15 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Production stage
+# Production stage - use lightweight server
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# Copy built assets and dependencies
+# Install serve for static file serving
+RUN npm install -g serve
+
+# Copy built assets only
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
 
-# Expose port
-EXPOSE 4173
-
-# Start preview server
-CMD ["npm", "run", "preview"]
+# Railway sets PORT dynamically - use shell form to expand variable
+CMD serve -s dist -l ${PORT:-4173}
