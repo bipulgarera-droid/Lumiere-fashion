@@ -419,6 +419,8 @@ const App: React.FC = () => {
            ${environmentLightingNote}
            
            ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
+           
+           IMPORTANT: IMAGE MUST BE 100% BORDERLESS. NO FILM FRAMES. NO KODAK BORDERS.
          `.trim();
       }
 
@@ -601,6 +603,39 @@ const App: React.FC = () => {
     };
 
     const smartFraming = getSmartFramingForRefine(refineFraming);
+
+    // Define notes locally for Refine scope using activeAsset.settingId
+    const photoRealismNote = `
+        PHOTOREALISM (CRITICAL - APPLIES TO EVERYTHING):
+        MODEL must look like a REAL PERSON photographed with a camera:
+        - SKIN: Natural texture with visible pores, fine lines. No plastic skin.
+        - HAIR: Natural texture with individual strands. No smooth CGI hair.
+        - EYES: Natural highlights and realistic iris detail. No uncanny eyes.
+        - BODY PROPORTIONS: Realistic, healthy proportions. Arms must have natural thickness.
+        - LIGHTING: Natural light sources (sun, window, softbox) with realistic shadows.
+        AVOID: CGI look, video game aesthetic, plastic appearance, uncanny valley, over-rendered, artificial.
+    `.trim();
+
+    const isStudioRefine = activeAsset.settingId === 'clean-studio' || activeAsset.settingId === 'studio-grey';
+    const studioRunoutNote = isStudioRefine ? `
+        STUDIO BACKDROP REQUIREMENT (ABSOLUTELY CRITICAL):
+        The studio backdrop MUST fill the ENTIRE image from edge to edge.
+        - NO visible backdrop edges or seams anywhere in the frame
+        - NO visible studio equipment, lights, stands, or reflectors
+        - NO "runout" where the backdrop paper ends
+        - The background must be a SEAMLESS, UNIFORM ${activeAsset.settingId === 'studio-grey' ? 'grey' : 'white'} tone
+        This applies regardless of camera angle, framing, or pose. The backdrop must ALWAYS be infinite.
+    `.trim() : '';
+
+    const isOuterRefine = activeAsset.settingId && !isStudioRefine;
+    const environmentLightingNote = isOuterRefine ? `
+        ENVIRONMENT LIGHTING INTEGRATION (CRITICAL):
+        The model must be lit BY the environment — as if actually present at the location.
+        - SHADOWS: Environment light sources must cast realistic shadows on the model
+        - COLOR CAST: Environment color must reflect onto the model
+        - RIM LIGHTING: Natural rim/edge lighting from environment
+        - GEOMETRIC CONSISTENCY: Light direction on model must match environment
+    `.trim() : '';
     const poseLabel = MODEL_POSES.find(p => p.id === refinePose)?.label || 'standing';
     const detailedAngle = getDetailedAngleDescription(refineAngle);
 
@@ -633,9 +668,10 @@ const App: React.FC = () => {
       - Same model identity (face, body)
       - Similar environment aesthetic
       
-      PHOTOREALISM: The model must look like a REAL PERSON photographed with a camera. Natural skin texture with pores and imperfections, natural hair with individual strands. Avoid CGI/plastic appearance.
+      ${photoRealismNote}
       
-      STUDIO BACKGROUNDS: No visible backdrop edges, no paper seams, no runout.
+      ${studioRunoutNote}
+      ${environmentLightingNote}
       ———————————————————————
       
       FINAL OUTPUT: A fashion photo shot from ${detailedAngle} angle with ${smartFraming} framing, model in ${poseLabel} pose.
