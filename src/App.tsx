@@ -1026,9 +1026,8 @@ const App: React.FC = () => {
       }
 
       // 5. Calculate Font Settings
-      let fontScale = 1.0;
-      if (overlayFontSize === 'small') fontScale = 0.8;
-      if (overlayFontSize === 'large') fontScale = 1.25;
+      // Base scale: 12 is the "standard" (1.0x)
+      const fontScale = overlayFontSize / 12;
 
       const fontFamilyStr = `"${overlayFontFamily}", sans-serif`;
 
