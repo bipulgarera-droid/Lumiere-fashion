@@ -332,12 +332,12 @@ const App: React.FC = () => {
       const isStudioSetting = selectedSetting?.id === 'studio-grey' || selectedSetting?.id === 'clean-studio';
       const studioRunoutNote = isStudioSetting ? `
         STUDIO BACKDROP REQUIREMENT (ABSOLUTELY CRITICAL):
-        The studio backdrop MUST fill the ENTIRE image from edge to edge.
-        - NO visible backdrop edges or seams anywhere in the frame
-        - NO visible studio equipment, lights, stands, or reflectors
-        - NO "runout" where the backdrop paper ends
-        - The background must be a SEAMLESS, UNIFORM ${selectedSetting?.id === 'studio-grey' ? 'grey' : 'white'} tone
-        This applies regardless of camera angle, framing, or pose. The backdrop must ALWAYS be infinite.
+        The studio backdrop must be an INFINITE, UNBROKEN FIELD of color.
+        1. NO VISIBLE CORNERS or studio architecture (walls, floors meeting walls).
+        2. NO VISIBLE EQUIPMENT: Softboxes, stands, cables, and reflectors MUST NOT be visible. MASK THEM OUT.
+        3. NO ROLLED PAPER EDGES or "runout".
+        4. The entire background from edge-to-edge must be a pure, seamless, infinite ${selectedSetting?.id === 'studio-grey' ? 'grey' : 'white'} cyclorama.
+        The image must look like it was cropped from the center of a massive studio with no edges visible.
       `.trim() : '';
 
       // ENVIRONMENT LIGHTING INTEGRATION - For exterior/location settings
@@ -393,7 +393,11 @@ const App: React.FC = () => {
            Generate a raw, authentic photo of ${shouldUseConsistency ? 'the SPECIFIED MODEL' : 'the TARGET MODEL'} wearing the garment shown in the reference image.
            
            ${shouldUseConsistency
-            ? `CHARACTER CONSISTENCY: Use the identity and features of the model in the provided second reference image (the one NOT showing the garment). Maintain her face, hair, and overall appearance exactly.`
+            ? `CHARACTER CONSISTENCY (FACE/BODY ONLY): Use the identity of the model in the provided second reference image.
+               CRITICAL RULE: You MUST IGNORE the pose, background, clothing, and lighting of the reference model image.
+               - Extract ONLY the facial features and body type.
+               - Place this model into the NEW pose and NEW environment defined below.
+               - The output must be a COMPLETELY NEW image, NOT a copy of the reference.`
             : `TARGET MODEL: ${selectedAvatar?.description || 'A fashion model'}.`
           }
            
@@ -619,12 +623,12 @@ const App: React.FC = () => {
     const isStudioRefine = activeAsset.settingId === 'clean-studio' || activeAsset.settingId === 'studio-grey';
     const studioRunoutNote = isStudioRefine ? `
         STUDIO BACKDROP REQUIREMENT (ABSOLUTELY CRITICAL):
-        The studio backdrop MUST fill the ENTIRE image from edge to edge.
-        - NO visible backdrop edges or seams anywhere in the frame
-        - NO visible studio equipment, lights, stands, or reflectors
-        - NO "runout" where the backdrop paper ends
-        - The background must be a SEAMLESS, UNIFORM ${activeAsset.settingId === 'studio-grey' ? 'grey' : 'white'} tone
-        This applies regardless of camera angle, framing, or pose. The backdrop must ALWAYS be infinite.
+        The studio backdrop must be an INFINITE, UNBROKEN FIELD of color.
+        1. NO VISIBLE CORNERS or studio architecture (walls, floors meeting walls).
+        2. NO VISIBLE EQUIPMENT: Softboxes, stands, cables, and reflectors MUST NOT be visible. MASK THEM OUT.
+        3. NO ROLLED PAPER EDGES or "runout".
+        4. The entire background from edge-to-edge must be a pure, seamless, infinite ${activeAsset.settingId === 'studio-grey' ? 'grey' : 'white'} cyclorama.
+        The image must look like it was cropped from the center of a massive studio with no edges visible.
     `.trim() : '';
 
     const isOuterRefine = activeAsset.settingId && !isStudioRefine;
