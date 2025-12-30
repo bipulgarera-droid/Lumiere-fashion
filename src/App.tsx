@@ -337,6 +337,7 @@ const App: React.FC = () => {
         2. NO VISIBLE EQUIPMENT: Softboxes, stands, cables, and reflectors MUST NOT be visible. MASK THEM OUT.
         3. NO ROLLED PAPER EDGES or "runout".
         4. The entire background from edge-to-edge must be a pure, seamless, infinite ${selectedSetting?.id === 'studio-grey' ? 'grey' : 'white'} cyclorama.
+        5. IGNORE REFERENCE IMAGE DEFECTS: Even if the input/reference image shows runout, studio lights, or edges, YOU MUST FIX IT. Do not replicate the background flaws.
         The image must look like it was cropped from the center of a massive studio with no edges visible.
       `.trim() : '';
 
@@ -628,6 +629,7 @@ const App: React.FC = () => {
         2. NO VISIBLE EQUIPMENT: Softboxes, stands, cables, and reflectors MUST NOT be visible. MASK THEM OUT.
         3. NO ROLLED PAPER EDGES or "runout".
         4. The entire background from edge-to-edge must be a pure, seamless, infinite ${activeAsset.settingId === 'studio-grey' ? 'grey' : 'white'} cyclorama.
+        5. IGNORE REFERENCE IMAGE DEFECTS: Even if the input/reference image shows runout, studio lights, or edges, YOU MUST FIX IT. Do not replicate the background flaws.
         The image must look like it was cropped from the center of a massive studio with no edges visible.
     `.trim() : '';
 
