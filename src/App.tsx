@@ -501,25 +501,25 @@ const App: React.FC = () => {
     setStatus('generating');
 
     const variationPrompt = `
-      STRICT ASPECT RATIO CHANGE w/ PIXEL-PERFECT CONSISTENCY.
+      STRICT OUTPAINTING TASK - NO BORDERS, NO COLOR SHIFT.
       
-      Goal: Extend/Crop the image to ratio ${targetRatio} WITHOUT changing the look.
+      Goal: Extend the background of the image to fill ratio ${targetRatio}.
       
-      CRITICAL:
-      - PRESERVE COLOR GRADING: The output MUST have the EXACT same color grading, contrast, saturation, and white balance as the input.
-      - NO RE-RENDERING: Do not re-light or re-style the image. It must look like the original photo was simply shot with a wider/taller lens.
-      - SEAMLESS EXTENSION: If outpainting, the new areas must blend perfectly with the existing environment.
+      CRITICAL ERRORS TO AVOID:
+      1. NO WHITEBOARDS/BARS: Do NOT add white, black, or colored bars to the sides. You must GENERATE BACKGROUND TEXTURE to fill the space.
+      2. NO COLOR SHIFT: The output MUST Match the input's color grade 100%. Do NOT add a green tint. Do NOT change the white balance.
+      3. NO RE-RENDERING: The central subject must remain pixel-identical. Only the EDGES should change.
       
       PRODUCT INTEGRITY (NON-NEGOTIABLE):
       The product (garment, accessory, shoes) must be reproduced with EXACT fidelity:
       - EXACT COLOR (no shifting), EXACT TEXTURE, EXACT PATTERN, EXACT SHAPE.
       
       RULES:
-      1. PRESERVE THE IMAGE: You must maintain the EXACT model identity, the EXACT pose, the EXACT garment details, and the EXACT lighting of the input image.
-      2. NO RE-IMAGINING: Do not change the angle. Do not change the face. Do not change the colors.
-      3. OUTPAINT/CROP: Only extend the background (outpaint) or crop the image intelligently to fit the new ${targetRatio} frame.
+      1. EXTEND THE ENVIRONMENT: Continue the pattern of the floor/wall/background seamlessly to the new edges.
+      2. IGNORE BORDERS: If the input has borders, remove them. The output must be full-bleed.
+      3. LIGHTING CONSISTENCY: New background areas must match the existing lighting direction and falloff.
       
-      The result should look identical to the original, just with different dimensions.
+      The result should be the EXACT same photo, just seen through a wider/taller lens.
     `.trim();
 
     try {
