@@ -4,63 +4,82 @@ import { AspectRatio } from "../types";
 // Initialize the client. 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 const generateSingleImage = async (
   productBase64: string,
   promptText: string,
   aspectRatio: AspectRatio,
   modelBase64?: string
 ): Promise<string> => {
-  try {
-    const parts: any[] = [
-      { text: promptText },
-      {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: productBase64
-        }
-      }
-    ];
+  let lastError: any;
+  const MAX_RETRIES = 3;
 
-    // Add model reference image if provided
-    if (modelBase64) {
-      console.log('Adding model character reference to parts');
-      parts.push({
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: modelBase64
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const parts: any[] = [
+        { text: promptText },
+        {
+          inlineData: {
+            mimeType: 'image/jpeg',
+            data: productBase64
+          }
+        }
+      ];
+
+      // Add model reference image if provided
+      if (modelBase64) {
+        if (attempt === 1) console.log('Adding model character reference to parts');
+        parts.push({
+          inlineData: {
+            mimeType: 'image/jpeg',
+            data: modelBase64
+          }
+        });
+      }
+
+      console.log(`Sending request to Gemini 2.5 Flash Image (Attempt ${attempt}/${MAX_RETRIES})...`);
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: { parts },
+        config: {
+          imageConfig: {
+            aspectRatio: aspectRatio,
+          }
         }
       });
-    }
 
-    console.log('Sending request to Gemini 2.5 Flash Image...');
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: { parts },
-      config: {
-        imageConfig: {
-          aspectRatio: aspectRatio,
+      if (response.candidates && response.candidates.length > 0) {
+        const parts = response.candidates[0].content.parts;
+        for (const part of parts) {
+          if (part.inlineData && part.inlineData.data) {
+            console.log('Gemini successfully generated image data');
+            return `data:image/png;base64,${part.inlineData.data}`;
+          }
         }
       }
-    });
+      throw new Error("No image data found in response.");
 
-    if (response.candidates && response.candidates.length > 0) {
-      const parts = response.candidates[0].content.parts;
-      for (const part of parts) {
-        if (part.inlineData && part.inlineData.data) {
-          console.log('Gemini successfully generated image data');
-          return `data:image/png;base64,${part.inlineData.data}`;
-        }
+    } catch (error) {
+      console.warn(`Gemini Generation Attempt ${attempt} failed:`, error);
+      lastError = error;
+
+      if (attempt < MAX_RETRIES) {
+        // Exponential backoff: 1000ms, 2000ms, 4000ms
+        const waitTime = 1000 * Math.pow(2, attempt - 1);
+        console.log(`Retrying in ${waitTime}ms...`);
+        await delay(waitTime);
+        continue;
       }
     }
-    throw new Error("No image data found in response.");
-  } catch (error) {
-    console.error("Gemini Single Generation Error:", error);
-    // Extract detailed error if possible
-    if (typeof error === 'object' && error !== null && 'message' in error) {
-      throw new Error(`Gemini Error: ${error.message}`);
-    }
-    throw error;
   }
+
+  // If we get here, all retries failed
+  console.error("Gemini Generation failed after max retries:", lastError);
+  if (typeof lastError === 'object' && lastError !== null && 'message' in lastError) {
+    throw new Error(`Gemini Error (after ${MAX_RETRIES} attempts): ${lastError.message}`);
+  }
+  throw lastError;
 }
 
 // Helper to fetch an image and return its base64 data
