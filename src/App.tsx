@@ -501,14 +501,19 @@ const App: React.FC = () => {
     setStatus('generating');
 
     const variationPrompt = `
-      STRICT OUTPAINTING TASK - NO BORDERS, NO COLOR SHIFT.
+      STRICT OUTPAINTING TASK - FILL THE ENTIRE CANVAS.
       
-      Goal: Extend the background of the image to fill ratio ${targetRatio}.
+      Goal: Extend the background to fill aspect ratio ${targetRatio}.
       
-      CRITICAL ERRORS TO AVOID:
-      1. NO WHITEBOARDS/BARS: Do NOT add white, black, or colored bars to the sides. You must GENERATE BACKGROUND TEXTURE to fill the space.
-      2. NO COLOR SHIFT: The output MUST Match the input's color grade 100%. Do NOT add a green tint. Do NOT change the white balance.
-      3. NO RE-RENDERING: The central subject must remain pixel-identical. Only the EDGES should change.
+      FATAL ERROR: DO NOT ADD WHITE BARS, BLACK BARS, OR COLORED BORDERS.
+      - If you add solid bars to the sides/top/bottom, THE TASK HAS FAILED.
+      - You MUST INVENT new background texture (floor, walls, sky) to fill the empty space.
+      - The output must be FULL-BLEED with NO MARGINS.
+      
+      CRITICAL:
+      1. NO WHITESPACE: The entire canvas must be filled with the scene.
+      2. PRESERVE COLOR: The output MUST Match the input's color grade 100%. NO TINT.
+      3. PIXEL-PERFECT SUBJECT: The central model/product must remain unchanged.
       
       PRODUCT INTEGRITY (NON-NEGOTIABLE):
       The product (garment, accessory, shoes) must be reproduced with EXACT fidelity:
