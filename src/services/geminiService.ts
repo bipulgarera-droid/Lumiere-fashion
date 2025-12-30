@@ -32,9 +32,9 @@ const generateSingleImage = async (
       });
     }
 
-    console.log('Sending request to Gemini 3 Pro Image...');
+    console.log('Sending request to Gemini 2.5 Flash Image...');
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-2.5-flash-image',
       contents: { parts },
       config: {
         imageConfig: {
