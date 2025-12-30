@@ -108,11 +108,6 @@ const App: React.FC = () => {
 
   // ... (inside drawAdCreative) ...
 
-  // 5. Calculate Font Settings
-  let fontScale = 1.0;
-  if (overlayFontSize === 'small') fontScale = 0.8;
-  if (overlayFontSize === 'large') fontScale = 1.25;
-
   // ... (inside JSX) ...
 
   {/* Typography Row (NEW) */ }
@@ -1030,8 +1025,9 @@ const App: React.FC = () => {
       }
 
       // 5. Calculate Font Settings
-      // Base scale: 12 is the "standard" (1.0x)
-      const fontScale = overlayFontSize / 12;
+      let fontScale = 1.0;
+      if (overlayFontSize === 'small') fontScale = 0.8;
+      if (overlayFontSize === 'large') fontScale = 1.25;
 
       const fontFamilyStr = `"${overlayFontFamily}", sans-serif`;
 
@@ -1795,16 +1791,21 @@ const App: React.FC = () => {
                         {/* Font Family */}
                         <div className="flex-[1.5]">
                           <label className="text-[10px] text-brand-400 block mb-1">Font Family</label>
-                          <select
-                            value={overlayFontFamily}
-                            onChange={(e) => setOverlayFontFamily(e.target.value as any)}
-                            className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none"
-                          >
-                            <option value="Inter">Classic Sans</option>
-                            <option value="Playfair Display">Elegant Serif</option>
-                            <option value="Montserrat">Modern Sans</option>
-                            <option value="Roboto">Neutral Sans</option>
-                          </select>
+                          <div className="relative">
+                            <select
+                              value={overlayFontFamily}
+                              onChange={(e) => setOverlayFontFamily(e.target.value as any)}
+                              className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none appearance-none"
+                            >
+                              <option value="Inter">Classic Sans</option>
+                              <option value="Playfair Display">Elegant Serif</option>
+                              <option value="Montserrat">Modern Sans</option>
+                              <option value="Roboto">Neutral Sans</option>
+                            </select>
+                            <div className="absolute right-2 top-1.5 pointer-events-none text-brand-400">
+                              <ChevronDown size={12} />
+                            </div>
+                          </div>
                         </div>
                       </div>
 
