@@ -96,12 +96,14 @@ const App: React.FC = () => {
 
   // Text Overlay State
   const [overlayProductName, setOverlayProductName] = useState('');
+  const [overlaySubheader, setOverlaySubheader] = useState(''); // New subheader state
   const [overlayOriginalPrice, setOverlayOriginalPrice] = useState('');
   const [overlaySalePrice, setOverlaySalePrice] = useState('');
-  const [overlayPosition, setOverlayPosition] = useState<'top-left' | 'center' | 'bottom-left'>('top-left');
   const [overlayWatermark, setOverlayWatermark] = useState('');
+  const [overlayPosition, setOverlayPosition] = useState<'top-left' | 'top-right' | 'center' | 'bottom-left' | 'bottom-right'>('bottom-left');
+  const [overlayTextColor, setOverlayTextColor] = useState('#ffffff');
+  const [overlayWatermarkColor, setOverlayWatermarkColor] = useState('#ffffff'); // New watermark color state
   const [showOverlayPanel, setShowOverlayPanel] = useState(false);
-  const [overlayTextColor, setOverlayTextColor] = useState('#ffffff'); // Default white
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -956,31 +958,68 @@ const App: React.FC = () => {
         ctx.textAlign = 'center';
       } else if (overlayPosition === 'bottom-left') {
         textY = img.height - padding - Math.round(img.height * 0.1);
+      } else if (overlayPosition === 'top-right') {
+        textX = img.width - padding;
+        ctx.textAlign = 'right';
+      } else if (overlayPosition === 'bottom-right') {
+        textX = img.width - padding;
+        textY = img.height - padding - Math.round(img.height * 0.1);
+        ctx.textAlign = 'right';
       }
 
       // 5. Draw product name (if provided) - ALL BOLD
+      let productNameBottomY = textY; // Track bottom of product name
       if (overlayProductName) {
         const fontSize = Math.round(img.width * 0.04);
         ctx.font = `700 ${fontSize}px "Inter", sans-serif`;
-        ctx.fillStyle = overlayTextColor; // User-selected color
+        ctx.fillStyle = overlayTextColor;
         ctx.shadowColor = 'rgba(0,0,0,0.5)';
         ctx.shadowBlur = 4;
 
-        // Split into lines if there are multiple words
-        const words = overlayProductName.split(' ');
-        const midpoint = Math.ceil(words.length / 2);
-        const line1 = words.slice(0, midpoint).join(' ');
-        const line2 = words.slice(midpoint).join(' ');
+        // Split into lines ONLY if > 16 chars
+        let line1 = overlayProductName;
+        let line2 = '';
+
+        if (overlayProductName.length > 16) {
+          const words = overlayProductName.split(' ');
+          const midpoint = Math.ceil(words.length / 2);
+          line1 = words.slice(0, midpoint).join(' ');
+          line2 = words.slice(midpoint).join(' ');
+        }
 
         ctx.fillText(line1, textX, textY);
-        ctx.fillText(line2, textX, textY + fontSize * 1.2);
-        textY += fontSize * 2.8;
+        productNameBottomY = textY; // Bottom of first line roughly
+
+        if (line2) {
+          ctx.fillText(line2, textX, textY + fontSize * 1.2);
+          productNameBottomY = textY + fontSize * 1.2;
+        }
       }
 
-      // 6. Draw prices (if provided)
+      // 6. Draw Subheader (if provided)
+      let subheaderBottomY = productNameBottomY;
+      if (overlaySubheader) {
+        const subheaderSize = Math.round(img.width * 0.025); // Smaller than title
+        ctx.font = `400 ${subheaderSize}px "Inter", sans-serif`; // Regular weight
+        ctx.fillStyle = overlayTextColor;
+        ctx.shadowBlur = 3;
+
+        // Position below product name
+        const spacing = overlayProductName ? Math.round(img.width * 0.06) : 0;
+        subheaderBottomY = productNameBottomY + spacing;
+
+        ctx.fillText(overlaySubheader, textX, subheaderBottomY);
+      }
+
+      // 7. Draw prices (if provided)
       if (overlaySalePrice || overlayOriginalPrice) {
         const priceSize = Math.round(img.width * 0.035);
         ctx.shadowBlur = 3;
+
+        // Calculate Y position based on what's above it
+        // If subheader exists, add small gap. If not, add gap from title.
+        const gap = overlaySubheader ? Math.round(img.width * 0.04) : Math.round(img.width * 0.05); // Tighter if subheader is empty
+        const priceY = subheaderBottomY + gap; // Use the tracked bottom Y
 
         if (overlayOriginalPrice && overlaySalePrice) {
           // BOTH prices → Original with RED strikethrough + Sale price bold
@@ -988,12 +1027,12 @@ const App: React.FC = () => {
           ctx.fillStyle = 'rgba(255,255,255,0.6)';
           const originalText = `₹${overlayOriginalPrice}`;
           const originalWidth = ctx.measureText(originalText).width;
-          ctx.fillText(originalText, textX, textY);
+          ctx.fillText(originalText, textX, priceY);
 
           // RED Strikethrough line
           ctx.beginPath();
-          ctx.moveTo(textX, textY - priceSize * 0.3);
-          ctx.lineTo(textX + originalWidth, textY - priceSize * 0.3);
+          ctx.moveTo(textX, priceY - priceSize * 0.3);
+          ctx.lineTo(textX + originalWidth, priceY - priceSize * 0.3);
           ctx.strokeStyle = '#ef4444'; // Red color
           ctx.lineWidth = 2;
           ctx.stroke();
@@ -1001,17 +1040,17 @@ const App: React.FC = () => {
           // Sale price - BOLD
           ctx.font = `700 ${priceSize * 1.2}px "Inter", sans-serif`;
           ctx.fillStyle = overlayTextColor; // User-selected color
-          ctx.fillText(`₹${overlaySalePrice}`, textX + originalWidth + 15, textY);
+          ctx.fillText(`₹${overlaySalePrice}`, textX + originalWidth + 15, priceY);
         } else {
           // ONLY ONE price (no sale = no strikethrough) → Show as BOLD normal price
           const thePrice = overlaySalePrice || overlayOriginalPrice;
           ctx.font = `700 ${priceSize}px "Inter", sans-serif`;
           ctx.fillStyle = overlayTextColor; // User-selected color
-          ctx.fillText(`₹${thePrice}`, textX, textY);
+          ctx.fillText(`₹${thePrice}`, textX, priceY);
         }
       }
 
-      // 7. Draw watermark (if provided) - VERTICAL on right edge
+      // 8. Draw watermark (if provided) - VERTICAL on right edge
       if (overlayWatermark) {
         const wmSize = Math.round(img.width * 0.018);
         ctx.save(); // Save current state before rotation
@@ -1021,7 +1060,7 @@ const App: React.FC = () => {
         ctx.rotate(-Math.PI / 2); // Rotate 90° counter-clockwise (text reads bottom-to-top)
 
         ctx.font = `400 ${wmSize}px "Inter", sans-serif`;
-        ctx.fillStyle = overlayTextColor; // Use selected color
+        ctx.fillStyle = overlayWatermarkColor; // Use DISTINCT watermark color
         ctx.textAlign = 'center';
         ctx.shadowColor = 'rgba(0,0,0,0.3)';
         ctx.shadowBlur = 2;
@@ -1613,6 +1652,18 @@ const App: React.FC = () => {
                         />
                       </div>
 
+                      {/* Subheader (NEW) */}
+                      <div>
+                        <label className="text-[10px] text-brand-400 block mb-1">Subheader</label>
+                        <input
+                          type="text"
+                          value={overlaySubheader}
+                          onChange={(e) => setOverlaySubheader(e.target.value)}
+                          placeholder="Limited Edition Collection"
+                          className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+
                       {/* Prices Row */}
                       <div className="flex gap-2">
                         <div className="flex-1">
@@ -1643,12 +1694,14 @@ const App: React.FC = () => {
                           <label className="text-[10px] text-brand-400 block mb-1">Position</label>
                           <select
                             value={overlayPosition}
-                            onChange={(e) => setOverlayPosition(e.target.value as 'top-left' | 'center' | 'bottom-left')}
+                            onChange={(e) => setOverlayPosition(e.target.value as 'top-left' | 'center' | 'bottom-left' | 'top-right' | 'bottom-right')}
                             className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none"
                           >
                             <option value="top-left">Top Left</option>
+                            <option value="top-right">Top Right</option>
                             <option value="center">Center</option>
                             <option value="bottom-left">Bottom Left</option>
+                            <option value="bottom-right">Bottom Right</option>
                           </select>
                         </div>
                         <div className="flex-1">
@@ -1663,26 +1716,47 @@ const App: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Text Color Picker */}
-                      <div className="flex items-center gap-3">
-                        <label className="text-[10px] text-brand-400 whitespace-nowrap">Text Color</label>
-                        <div className="flex items-center gap-2 flex-1">
-                          <input
-                            type="color"
-                            value={overlayTextColor}
-                            onChange={(e) => setOverlayTextColor(e.target.value)}
-                            className="w-8 h-8 rounded cursor-pointer border border-brand-600 bg-transparent"
-                          />
+                      {/* Colors Row */}
+                      <div className="flex gap-4">
+                        {/* Main Text Color */}
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] text-brand-400 whitespace-nowrap">Text Color</label>
                           <div className="flex gap-1">
-                            {['#ffffff', '#000000', '#f5f5dc', '#1a1a2e'].map((color) => (
+                            {['#ffffff', '#000000', '#f5f5dc', '#1e293b'].map((color) => (
                               <button
                                 key={color}
                                 onClick={() => setOverlayTextColor(color)}
-                                className={`w-6 h-6 rounded border-2 ${overlayTextColor === color ? 'border-brand-500' : 'border-brand-700'}`}
+                                className={`w-4 h-4 rounded-full border border-gray-600 ${overlayTextColor === color ? 'ring-2 ring-brand-400 scale-110' : ''}`}
                                 style={{ backgroundColor: color }}
-                                title={color}
                               />
                             ))}
+                            <input
+                              type="color"
+                              value={overlayTextColor}
+                              onChange={(e) => setOverlayTextColor(e.target.value)}
+                              className="w-5 h-5 p-0 border-0 rounded-full overflow-hidden cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Watermark Color */}
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] text-brand-400 whitespace-nowrap">Watermark Color</label>
+                          <div className="flex gap-1">
+                            {['#ffffff', '#000000', '#f5f5dc', '#1e293b'].map((color) => (
+                              <button
+                                key={`wm-${color}`}
+                                onClick={() => setOverlayWatermarkColor(color)}
+                                className={`w-4 h-4 rounded-full border border-gray-600 ${overlayWatermarkColor === color ? 'ring-2 ring-brand-400 scale-110' : ''}`}
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                            <input
+                              type="color"
+                              value={overlayWatermarkColor}
+                              onChange={(e) => setOverlayWatermarkColor(e.target.value)}
+                              className="w-5 h-5 p-0 border-0 rounded-full overflow-hidden cursor-pointer"
+                            />
                           </div>
                         </div>
                       </div>
