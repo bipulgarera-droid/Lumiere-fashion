@@ -1002,13 +1002,13 @@ const App: React.FC = () => {
       let subheaderBottomY = productNameBottomY;
       if (overlaySubheader) {
         const subheaderSize = Math.round(img.width * 0.025); // Smaller than title
-        ctx.font = `400 ${subheaderSize}px "Inter", sans-serif`; // Regular weight
+        ctx.font = `400 ${subheaderSize}px "Inter", sans-serif`;
         ctx.fillStyle = overlayTextColor;
-        // ctx.shadowBlur = 3; // Removed shadow
 
-        // Position below product name
-        // TIGHTER SPACING: (0.06 -> 0.035)
-        const spacing = overlayProductName ? Math.round(img.width * 0.035) : 0;
+        // Spacing: We need to move down by (Font Height + Padding)
+        // Previous baseline (productNameBottomY) -> New baseline
+        const padding = Math.round(img.width * 0.015);
+        const spacing = overlayProductName ? (subheaderSize + padding) : 0;
         subheaderBottomY = productNameBottomY + spacing;
 
         ctx.fillText(overlaySubheader, textX, subheaderBottomY);
@@ -1017,15 +1017,13 @@ const App: React.FC = () => {
       // 7. Draw prices (if provided)
       if (overlaySalePrice || overlayOriginalPrice) {
         const priceSize = Math.round(img.width * 0.035);
-        // ctx.shadowBlur = 3; // Removed shadow
 
         // Calculate Y position based on what's above it
-        // If subheader exists, add small gap. If not, add gap from title.
-        // TIGHTER SPACING:
-        // Gap from Subheader: 0.04 -> 0.025
-        // Gap from Title (if no subheader): 0.05 -> 0.04
-        const gap = overlaySubheader ? Math.round(img.width * 0.025) : Math.round(img.width * 0.04);
-        const priceY = subheaderBottomY + gap; // Use the tracked bottom Y
+        // We must add the Font Height of the PRICE to the previous baseline
+        const padding = Math.round(img.width * 0.02); // Clean gap
+        const offset = overlaySubheader ? (priceSize + padding) : (priceSize + padding * 2);
+
+        const priceY = subheaderBottomY + offset;
 
         if (overlayOriginalPrice && overlaySalePrice) {
           // BOTH prices → Original with RED strikethrough + Sale price bold
