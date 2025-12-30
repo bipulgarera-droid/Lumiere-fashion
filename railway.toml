@@ -2,6 +2,10 @@
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
+# Pass env vars to Docker build
+[build.args]
+GEMINI_API_KEY = "${{ GEMINI_API_KEY }}"
+
 [deploy]
 healthcheckPath = "/"
 healthcheckTimeout = 300
