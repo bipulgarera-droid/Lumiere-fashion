@@ -3,8 +3,14 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Accept API key as build arg from Railway
+# Accept API key as build arg from Railway
 ARG GEMINI_API_KEY
+ARG SUPABASE_URL
+ARG SUPABASE_ANON_KEY
+
 ENV GEMINI_API_KEY=$GEMINI_API_KEY
+ENV SUPABASE_URL=$SUPABASE_URL
+ENV SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
 
 # Install dependencies
 COPY package*.json ./
