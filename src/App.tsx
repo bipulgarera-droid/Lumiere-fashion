@@ -501,9 +501,18 @@ const App: React.FC = () => {
     setStatus('generating');
 
     const variationPrompt = `
-      STRICT IMAGE RESIZING TASK.
+      STRICT ASPECT RATIO CHANGE w/ PIXEL-PERFECT CONSISTENCY.
       
-      Goal: Convert the input image to aspect ratio ${targetRatio}.
+      Goal: Extend/Crop the image to ratio ${targetRatio} WITHOUT changing the look.
+      
+      CRITICAL:
+      - PRESERVE COLOR GRADING: The output MUST have the EXACT same color grading, contrast, saturation, and white balance as the input.
+      - NO RE-RENDERING: Do not re-light or re-style the image. It must look like the original photo was simply shot with a wider/taller lens.
+      - SEAMLESS EXTENSION: If outpainting, the new areas must blend perfectly with the existing environment.
+      
+      PRODUCT INTEGRITY (NON-NEGOTIABLE):
+      The product (garment, accessory, shoes) must be reproduced with EXACT fidelity:
+      - EXACT COLOR (no shifting), EXACT TEXTURE, EXACT PATTERN, EXACT SHAPE.
       
       RULES:
       1. PRESERVE THE IMAGE: You must maintain the EXACT model identity, the EXACT pose, the EXACT garment details, and the EXACT lighting of the input image.
