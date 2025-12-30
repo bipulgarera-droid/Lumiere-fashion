@@ -16,7 +16,9 @@ import {
   Focus,
   User,
   RefreshCw,
-  ChevronRight
+  ChevronRight,
+  Type,
+  ChevronDown
 } from 'lucide-react';
 
 import Header from './components/Header';
@@ -30,7 +32,8 @@ import {
   RATIO_LABELS,
   CAMERA_ANGLES,
   CAMERA_FRAMINGS,
-  MODEL_POSES
+  MODEL_POSES,
+  PRODUCT_TYPES
 } from './constants';
 import {
   GeneratedAsset,
@@ -40,7 +43,8 @@ import {
   GenerationStatus,
   CameraAngle,
   CameraFraming,
-  ModelPose
+  ModelPose,
+  ProductType
 } from './types';
 import { generateFashionAssets } from './services/geminiService';
 import { upscaleImage } from './services/upscaleService';
@@ -61,6 +65,7 @@ const App: React.FC = () => {
   const [selectedAngle, setSelectedAngle] = useState<CameraAngle>('eye-level');
   const [selectedFraming, setSelectedFraming] = useState<CameraFraming>('wide');
   const [selectedPose, setSelectedPose] = useState<ModelPose>('generic');
+  const [selectedProductType, setSelectedProductType] = useState<ProductType>('top');
 
   // Refine Controls (Right Panel - Local)
   const [refineAngle, setRefineAngle] = useState<CameraAngle>('eye-level');
@@ -73,6 +78,7 @@ const App: React.FC = () => {
 
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>(AspectRatio.Portrait);
   const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [generateCount, setGenerateCount] = useState<number>(3); // 1-3 images
 
   // App State
   const [generatedAssets, setGeneratedAssets] = useState<GeneratedAsset[]>([]);
@@ -87,6 +93,15 @@ const App: React.FC = () => {
   // Selection Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+
+  // Text Overlay State
+  const [overlayProductName, setOverlayProductName] = useState('');
+  const [overlayOriginalPrice, setOverlayOriginalPrice] = useState('');
+  const [overlaySalePrice, setOverlaySalePrice] = useState('');
+  const [overlayPosition, setOverlayPosition] = useState<'top-left' | 'center' | 'bottom-left'>('top-left');
+  const [overlayWatermark, setOverlayWatermark] = useState('');
+  const [showOverlayPanel, setShowOverlayPanel] = useState(false);
+  const [overlayTextColor, setOverlayTextColor] = useState('#ffffff'); // Default white
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -186,10 +201,11 @@ const App: React.FC = () => {
   // Helper to translate UI options into powerful prompt instructions
   const getDetailedAngleDescription = (angle: CameraAngle): string => {
     switch (angle) {
-      case 'low-angle': return "EXTREME LOW ANGLE, worm's-eye view, camera placed low looking UP at the subject";
-      case 'high-angle': return "HIGH ANGLE, camera placed above looking DOWN, bird's-eye perspective";
-      case 'side-angle': return "SIDE PROFILE VIEW, 90-degree side shot of the subject, profile silhouette";
-      default: return "EYE LEVEL, straight-on neutral camera angle";
+      case 'eye-level': return "EYE LEVEL, camera positioned at the subject's eye height, horizontally straight - NOT looking up, NOT looking down";
+      case 'low-angle': return "LOW ANGLE, camera placed BELOW the subject looking UP at them, worm's-eye perspective";
+      case 'high-angle': return "HIGH ANGLE, camera placed ABOVE the subject looking DOWN at them, bird's-eye perspective";
+      case 'side-angle': return "SIDE PROFILE, 90-degree lateral view of the subject, profile silhouette";
+      default: return "EYE LEVEL, camera at subject's eye height, horizontally straight";
     }
   };
 
@@ -219,8 +235,50 @@ const App: React.FC = () => {
     // Define detailed variables for prompt
     const detailedAngle = getDetailedAngleDescription(selectedAngle);
     // Safe lookup for display labels
-    const framingLabel = CAMERA_FRAMINGS.find(f => f.id === selectedFraming)?.label || 'Medium Shot';
+    // Smart framing that adapts based on PRODUCT TYPE
+    const getSmartFramingDescription = (framing: CameraFraming, productType: ProductType): string => {
+      // Matrix: [Product Type][Framing] => Description
+      const framingMatrix: Record<ProductType, Record<CameraFraming, string>> = {
+        'top': {
+          'wide': 'full body shot showing the model head to feet',
+          'medium': 'medium shot framing from waist up, showing the top/shirt prominently',
+          'close-up': 'close-up shot from chest up, showcasing the top neckline, fabric, and fit'
+        },
+        'bottom': {
+          'wide': 'full body shot showing head to feet, with pants/bottoms clearly visible',
+          'medium': 'medium shot framing from above waist to below knees, focusing on the pants/bottoms fit and style',
+          'close-up': 'detailed shot from waist to mid-thigh, highlighting the pants/bottoms waistband, pockets, and fabric texture'
+        },
+        'full-outfit': {
+          'wide': 'full body editorial shot showing the complete outfit from head to feet with environment',
+          'medium': 'three-quarter shot from head to below knees, showing most of the outfit',
+          'close-up': 'upper body shot focusing on outfit coordination, fabric details, and styling'
+        },
+        'accessory': {
+          'wide': 'lifestyle shot showing the accessory in context with the model',
+          'medium': 'product-focused shot with the accessory as the clear focal point',
+          'close-up': 'detailed product shot highlighting the accessory texture, material, and craftsmanship'
+        }
+      };
+      return framingMatrix[productType][framing] || 'medium fashion shot';
+    };
+
+    const framingLabel = getSmartFramingDescription(selectedFraming, selectedProductType);
     const poseLabel = MODEL_POSES.find(p => p.id === selectedPose)?.label || 'Standing';
+
+    // Product priority instruction - ensures the product isn't cropped out
+    const productPriorityNote = 'IMPORTANT: The PRODUCT/GARMENT from the reference image must ALWAYS be fully visible. Adjust framing as needed to ensure the entire garment is shown.';
+
+    // PRODUCT INTEGRITY - NON-NEGOTIABLE (applies to ALL generation types)
+    const productIntegrityNote = `
+      PRODUCT INTEGRITY (NON-NEGOTIABLE):
+      The product from the reference image (garment, accessory, shoes, bag, etc.) must be reproduced with EXACT fidelity:
+      - EXACT COLOR: Match the precise hex values, hue, saturation, and brightness. No color shifting, no lightening, no darkening.
+      - EXACT TEXTURE: Preserve fabric weave, leather grain, surface detail, sheen, and material properties.
+      - EXACT PATTERN: If there are prints, stripes, logos, hardware, or gradients, reproduce them identically.
+      - EXACT SHAPE: Maintain the product's silhouette, cut, construction, and design details.
+      This is the single most important requirement. The product IS what is being photographed.
+    `.trim();
 
     try {
       let modelBase64: string | undefined;
@@ -247,6 +305,54 @@ const App: React.FC = () => {
 
       const highFiAvoid = 'Avoid: Color shifting, vintage tints, cloudy haze, low contrast.';
 
+      // PHOTOREALISM - Anti-AI artifacts (used in ALL prompts)
+      const photoRealismNote = `
+        PHOTOREALISM (CRITICAL - APPLIES TO EVERYTHING):
+        
+        MODEL must look like a REAL PERSON photographed with a camera:
+        - SKIN: Natural texture with visible pores, fine lines, subtle imperfections. No plastic/airbrushed skin.
+        - HAIR: Natural texture with individual strands, flyaways. No smooth CGI hair.
+        - EYES: Natural highlights and realistic iris detail. No uncanny/glassy eyes.
+        - BODY PROPORTIONS: Realistic, healthy proportions. Arms must have natural thickness and muscle definition. No unnaturally thin limbs, no elongated fingers, no distorted hands. Proper joint placement.
+        - HANDS/FINGERS: Correct number of fingers (5 per hand), natural hand poses, proper finger proportions.
+        
+        LIGHTING must look like REAL PHOTOGRAPHY:
+        - Natural light sources (sun, window, softbox) with realistic shadows and highlights.
+        - Proper light falloff and color temperature.
+        - No flat CG lighting, no unrealistic rim lights, no over-exposed artificial glow.
+        
+        ENVIRONMENT must look like a REAL LOCATION photographed on-site:
+        - TEXTURES: Authentic materials (real concrete, real marble, real sand, real leaves).
+        - ATMOSPHERE: Real depth, real bokeh, genuine environmental details.
+        
+        AVOID: CGI look, video game aesthetic, plastic appearance, uncanny valley, over-rendered, artificial, AI-generated appearance, unrealistic body proportions.
+      `.trim();
+
+      // STUDIO RUNOUT PREVENTION - Applies when Studio Grey or Clean Studio is selected
+      const isStudioSetting = selectedSetting?.id === 'studio-grey' || selectedSetting?.id === 'clean-studio';
+      const studioRunoutNote = isStudioSetting ? `
+        STUDIO BACKDROP REQUIREMENT (ABSOLUTELY CRITICAL):
+        The studio backdrop MUST fill the ENTIRE image from edge to edge.
+        - NO visible backdrop edges or seams anywhere in the frame
+        - NO visible studio equipment, lights, stands, or reflectors
+        - NO "runout" where the backdrop paper ends
+        - The background must be a SEAMLESS, UNIFORM ${selectedSetting?.id === 'studio-grey' ? 'grey' : 'white'} tone
+        This applies regardless of camera angle, framing, or pose. The backdrop must ALWAYS be infinite.
+      `.trim() : '';
+
+      // ENVIRONMENT LIGHTING INTEGRATION - For exterior/location settings
+      const isExteriorSetting = selectedSetting?.id && !isStudioSetting;
+      const environmentLightingNote = isExteriorSetting ? `
+        ENVIRONMENT LIGHTING INTEGRATION (CRITICAL):
+        The model must be lit BY the environment — as if actually present at the location.
+        - SHADOWS: Environment light sources must cast realistic shadows on the model (sun position, window light, etc.)
+        - COLOR CAST: Environment color must reflect onto the model (warm golden tones at beach sunset, green tint in forest, etc.)
+        - RIM LIGHTING: Natural rim/edge lighting from environment light sources
+        - REFLECTIONS: Subtle environment reflections on skin and fabric surfaces
+        - GEOMETRIC CONSISTENCY: Light direction on model must match environment light direction
+        The model must look like they were ACTUALLY PHOTOGRAPHED at this location, not composited in.
+      `.trim() : '';
+
       if (preserveOriginal) {
         // Mode: Preserve original subject/bg, just change camera params
         fullPrompt = `
@@ -258,11 +364,22 @@ const App: React.FC = () => {
           
           CRITICAL: Do NOT change the model's identity or the environment. Only adjust the camera perspective and framing as requested above.
           
+          ${productIntegrityNote}
+          
+          ${productPriorityNote}
+          
           ${highFidelityMode
             ? highFiStyle
             : `STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture.
-           Avoid: film borders, film frame, white border, black border, text, watermarks.`
+           CRITICAL: Generate a BORDERLESS, FULL-BLEED image. The photo should fill the entire canvas edge-to-edge.
+           Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text overlays, watermarks.`
           }
+          
+          ${photoRealismNote}
+          
+          ${studioRunoutNote}
+          ${environmentLightingNote}
+          
           ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
         `.trim();
       } else {
@@ -282,19 +399,26 @@ const App: React.FC = () => {
           }
            
            POSE: ${poseLabel}.
-           IMPORTANT: Focus on the garment texture and fit. If the reference has a person, replace them with the specified model.
+           ${productIntegrityNote}
+           ${productPriorityNote}
            
            SETTING: ${selectedSetting?.description}.
            
            ${highFidelityMode
             ? highFiStyle
-            : 'STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture, unretouched aesthetic, depth of field.'
+            : 'STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture, unretouched aesthetic, depth of field. CRITICAL: Generate a BORDERLESS, FULL-BLEED image.'
           }
            
            ${highFidelityMode
             ? highFiAvoid
-            : 'Avoid: film borders, film frame, white border, black border, text, watermarks, branding, CGI, airbrushed, artificial lighting, plastic skin, over-sharpened, commercial catalog look.'
+            : 'Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text, watermarks, branding, CGI, airbrushed, artificial lighting, plastic skin, over-sharpened, commercial catalog look.'
           }
+           
+           ${photoRealismNote}
+           
+           ${studioRunoutNote}
+           ${environmentLightingNote}
+           
            ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
          `.trim();
       }
@@ -304,7 +428,7 @@ const App: React.FC = () => {
         uploadedImage,
         fullPrompt,
         targetRatio,
-        3, // count
+        generateCount, // User-selected count (1-3)
         modelBase64 // Pass the base64 string directly (only if fetched)
       );
 
@@ -450,27 +574,72 @@ const App: React.FC = () => {
 
     setStatus('generating');
 
-    const framingLabel = CAMERA_FRAMINGS.find(f => f.id === refineFraming)?.label;
-    const poseLabel = MODEL_POSES.find(p => p.id === refinePose)?.label;
+    // Use smart framing based on product type (inherit from left panel)
+    const getSmartFramingForRefine = (framing: CameraFraming): string => {
+      const matrix: Record<ProductType, Record<CameraFraming, string>> = {
+        'top': {
+          'wide': 'full body shot head to feet',
+          'medium': 'waist up shot',
+          'close-up': 'chest and shoulders up'
+        },
+        'bottom': {
+          'wide': 'full body head to feet',
+          'medium': 'waist to below knees',
+          'close-up': 'waist to mid-thigh'
+        },
+        'full-outfit': {
+          'wide': 'full body with environment',
+          'medium': 'head to knees',
+          'close-up': 'upper body'
+        },
+        'accessory': {
+          'wide': 'lifestyle context',
+          'medium': 'product focus',
+          'close-up': 'product detail'
+        }
+      };
+      return matrix[selectedProductType][framing];
+    };
+
+    const smartFraming = getSmartFramingForRefine(refineFraming);
+    const poseLabel = MODEL_POSES.find(p => p.id === refinePose)?.label || 'standing';
     const detailedAngle = getDetailedAngleDescription(refineAngle);
 
     const refinePrompt = `
-      STRICT REFINEMENT TASK.
+      RE-SHOOT TASK: Create a NEW photograph with DIFFERENT camera settings.
       
-      Goal: Modify ONLY the Camera and Pose details of the input image.
+      ⚠️ THESE ARE THE CHANGES - THE OUTPUT MUST BE DIFFERENT FROM THE INPUT:
       
-      TARGET VISUALS:
-      - Camera Angle: ${detailedAngle}
-      - Framing: ${framingLabel}
-      - Model Pose: ${poseLabel}
+      1. CAMERA ANGLE → ${detailedAngle}
+         The camera position MUST change. Shoot from ${detailedAngle}.
+         
+      2. FRAMING/ZOOM → ${smartFraming}
+         The crop MUST change. Frame the shot as ${smartFraming}.
+         If this is tighter than the input (e.g., "waist up" from a full body), ZOOM IN.
+         If this is wider than the input, ZOOM OUT.
+         
+      3. MODEL POSE → ${poseLabel}
+         The pose MUST change to ${poseLabel}.
       
-      CRITICAL INSTRUCTIONS - READ CAREFULLY:
-      1. COLOR LOCK: The garment in the output MUST MATCH the input image exactly in color (hex code), fabric, and pattern. 
-         If the input garment is dark blue, the output must be dark blue. DO NOT LIGHTEN OR DARKEN THE GARMENT.
-      2. IDENTITY LOCK: Keep the EXACT same model identity (face, body, ethnicity).
-      3. SETTING LOCK: Keep the EXACT same environment/background.
+      THE OUTPUT IMAGE MUST VISUALLY DIFFER FROM THE INPUT based on the above.
+      If the input is low-angle and I requested eye-level, the output MUST be eye-level.
+      If the input is wide and I requested close-up, the output MUST be cropped closer.
       
-      ACTION: Re-shoot the exact same scene/model/garment with the new camera angle/framing or pose specified above.
+      ———————————————————————
+      PRODUCT INTEGRITY (NON-NEGOTIABLE):
+      The product (garment, accessory, shoes) must be reproduced with EXACT fidelity:
+      - EXACT COLOR (no shifting), EXACT TEXTURE, EXACT PATTERN, EXACT SHAPE.
+      
+      PRESERVE:
+      - Same model identity (face, body)
+      - Similar environment aesthetic
+      
+      PHOTOREALISM: The model must look like a REAL PERSON photographed with a camera. Natural skin texture with pores and imperfections, natural hair with individual strands. Avoid CGI/plastic appearance.
+      
+      STUDIO BACKGROUNDS: No visible backdrop edges, no paper seams, no runout.
+      ———————————————————————
+      
+      FINAL OUTPUT: A fashion photo shot from ${detailedAngle} angle with ${smartFraming} framing, model in ${poseLabel} pose.
     `.trim();
 
     try {
@@ -696,6 +865,151 @@ const App: React.FC = () => {
     }
   };
 
+  // Download image with text overlay baked in
+  const handleDownloadWithOverlay = async (asset: GeneratedAsset) => {
+    try {
+      // 1. Load the image
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = asset.imageUrl;
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error("Failed to load image"));
+      });
+
+      // 2. Create canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Canvas context not available");
+
+      // 3. Draw image
+      ctx.drawImage(img, 0, 0);
+
+      // 4. Calculate text positions
+      const padding = Math.round(img.width * 0.05);
+      let textX = padding;
+      let textY = padding + Math.round(img.height * 0.08);
+
+      if (overlayPosition === 'center') {
+        textX = img.width / 2;
+        textY = img.height / 2;
+        ctx.textAlign = 'center';
+      } else if (overlayPosition === 'bottom-left') {
+        textY = img.height - padding - Math.round(img.height * 0.1);
+      }
+
+      // 5. Draw product name (if provided) - ALL BOLD
+      if (overlayProductName) {
+        const fontSize = Math.round(img.width * 0.04);
+        ctx.font = `700 ${fontSize}px "Inter", sans-serif`;
+        ctx.fillStyle = overlayTextColor; // User-selected color
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
+
+        // Split into lines if there are multiple words
+        const words = overlayProductName.split(' ');
+        const midpoint = Math.ceil(words.length / 2);
+        const line1 = words.slice(0, midpoint).join(' ');
+        const line2 = words.slice(midpoint).join(' ');
+
+        ctx.fillText(line1, textX, textY);
+        ctx.fillText(line2, textX, textY + fontSize * 1.2);
+        textY += fontSize * 2.8;
+      }
+
+      // 6. Draw prices (if provided)
+      if (overlaySalePrice || overlayOriginalPrice) {
+        const priceSize = Math.round(img.width * 0.035);
+        ctx.shadowBlur = 3;
+
+        if (overlayOriginalPrice && overlaySalePrice) {
+          // BOTH prices → Original with RED strikethrough + Sale price bold
+          ctx.font = `400 ${priceSize}px "Inter", sans-serif`;
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          const originalText = `₹${overlayOriginalPrice}`;
+          const originalWidth = ctx.measureText(originalText).width;
+          ctx.fillText(originalText, textX, textY);
+
+          // RED Strikethrough line
+          ctx.beginPath();
+          ctx.moveTo(textX, textY - priceSize * 0.3);
+          ctx.lineTo(textX + originalWidth, textY - priceSize * 0.3);
+          ctx.strokeStyle = '#ef4444'; // Red color
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Sale price - BOLD
+          ctx.font = `700 ${priceSize * 1.2}px "Inter", sans-serif`;
+          ctx.fillStyle = overlayTextColor; // User-selected color
+          ctx.fillText(`₹${overlaySalePrice}`, textX + originalWidth + 15, textY);
+        } else {
+          // ONLY ONE price (no sale = no strikethrough) → Show as BOLD normal price
+          const thePrice = overlaySalePrice || overlayOriginalPrice;
+          ctx.font = `700 ${priceSize}px "Inter", sans-serif`;
+          ctx.fillStyle = overlayTextColor; // User-selected color
+          ctx.fillText(`₹${thePrice}`, textX, textY);
+        }
+      }
+
+      // 7. Draw watermark (if provided) - VERTICAL on right edge
+      if (overlayWatermark) {
+        const wmSize = Math.round(img.width * 0.018);
+        ctx.save(); // Save current state before rotation
+
+        // Move to right side, vertically centered
+        ctx.translate(img.width - padding / 2, img.height / 2);
+        ctx.rotate(-Math.PI / 2); // Rotate 90° counter-clockwise (text reads bottom-to-top)
+
+        ctx.font = `400 ${wmSize}px "Inter", sans-serif`;
+        ctx.fillStyle = overlayTextColor; // Use selected color
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 2;
+        ctx.fillText(overlayWatermark, 0, 0);
+
+        ctx.restore(); // Restore to original state
+      }
+
+      // 8. Export (and optionally upscale) and download
+      let finalDataUrl = canvas.toDataURL('image/png');
+      let filename = `lumiere-${asset.id}-ad.png`;
+
+      // Upscale if requested
+      if (shouldUpscale) {
+        setIsUpscaling(true);
+        try {
+          finalDataUrl = await upscaleImage(finalDataUrl, "2x");
+          filename = `lumiere-${asset.id}-ad-upscaled.png`;
+        } catch (err) {
+          console.error("Upscale failed, using original:", err);
+        } finally {
+          setIsUpscaling(false);
+        }
+      }
+
+      // Convert to blob and download
+      const response = await fetch(finalDataUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Overlay download failed:", error);
+      alert("Failed to create ad image. Downloading original.");
+      handleDownload(asset);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-brand-950 text-brand-100 font-sans overflow-hidden">
       <DebugConsole />
@@ -817,10 +1131,10 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex flex-col">
                   <span className={`text-xs font-bold ${highFidelityMode ? 'text-indigo-400' : 'text-brand-200'}`}>
-                    High Fidelity Mode
+                    Commercial Style
                   </span>
                   <span className="text-[10px] text-brand-500 leading-tight">
-                    Strict color accuracy. Reduces artistic styling to preserve garment details.
+                    Clean digital look. No vintage film styling.
                   </span>
                 </div>
               </label>
@@ -834,6 +1148,24 @@ const App: React.FC = () => {
                 Camera & Pose
               </h2>
               <div className="grid grid-cols-1 gap-4 bg-brand-900 p-4 rounded-xl border border-brand-800 shadow-inner">
+
+                {/* Product Type */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-bold text-brand-400 uppercase flex items-center gap-1.5">
+                    <Type size={10} /> Product Type
+                  </label>
+                  <div className="flex bg-brand-950 p-1 rounded-lg border border-brand-800 flex-wrap gap-1">
+                    {PRODUCT_TYPES.map(pt => (
+                      <button
+                        key={pt.id}
+                        onClick={() => setSelectedProductType(pt.id)}
+                        className={`flex-1 min-w-[70px] py-1.5 text-[10px] font-medium rounded-md transition-all ${selectedProductType === pt.id ? 'bg-brand-700 text-white shadow-sm' : 'text-brand-500 hover:text-brand-300 hover:bg-brand-900'}`}
+                      >
+                        {pt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Angle */}
                 <div className="flex flex-col gap-2">
@@ -1021,7 +1353,25 @@ const App: React.FC = () => {
           </div>
 
           {/* CTA */}
-          <div className="p-4 bg-brand-950/95 backdrop-blur-sm border-t border-brand-800 sticky bottom-0 z-30">
+          <div className="p-4 bg-brand-950/95 backdrop-blur-sm border-t border-brand-800 sticky bottom-0 z-30 space-y-3">
+            {/* Image Count Selector */}
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Images to Generate</span>
+              <div className="flex gap-1">
+                {[1, 2, 3].map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => setGenerateCount(num)}
+                    className={`px-3 py-1 text-xs rounded font-medium transition-all ${generateCount === num
+                      ? 'bg-white text-brand-950'
+                      : 'bg-brand-800 text-brand-300 hover:bg-brand-700'
+                      }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
               onClick={() => handleGenerate()}
               disabled={status === 'generating' || !uploadedImage}
@@ -1060,17 +1410,17 @@ const App: React.FC = () => {
           z-10
         ">
 
-          {/* Main Workspace */}
-          <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center justify-center w-full custom-scrollbar pb-20 md:pb-8">
+          {/* Main Workspace - SCROLLABLE */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 flex flex-col items-center w-full custom-scrollbar pb-20 md:pb-8">
             {activeAsset ? (
               <div className="w-full max-w-4xl flex flex-col gap-4 animate-in fade-in duration-500">
 
-                {/* Main Image Card */}
+                {/* Main Image Card - No height restriction, scrollable parent */}
                 <div className="relative group rounded-xl overflow-hidden shadow-2xl shadow-black bg-brand-950 border border-brand-800 self-center max-w-full transition-all duration-500">
                   <img
                     src={activeAsset.imageUrl}
                     alt="Result"
-                    className="max-h-[40vh] md:max-h-[55vh] object-contain w-auto"
+                    className="max-h-[50vh] md:max-h-[70vh] max-w-full object-contain"
                   />
 
                   {/* Overlay Actions */}
@@ -1177,6 +1527,131 @@ const App: React.FC = () => {
                       Apply Changes
                     </button>
                   </div>
+                </div>
+
+                {/* 3. Ad Creative Panel */}
+                <div className="bg-brand-800/50 border border-brand-700 rounded-xl p-3 w-full shadow-inner backdrop-blur-sm">
+                  <button
+                    onClick={() => setShowOverlayPanel(!showOverlayPanel)}
+                    className="flex items-center justify-between w-full"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Type size={12} className="text-brand-400" />
+                      <span className="text-[10px] font-bold text-brand-300 uppercase tracking-widest">Ad Creative</span>
+                    </div>
+                    <ChevronDown size={14} className={`text-brand-400 transition-transform ${showOverlayPanel ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {showOverlayPanel && (
+                    <div className="mt-3 space-y-3">
+                      {/* Product Name */}
+                      <div>
+                        <label className="text-[10px] text-brand-400 block mb-1">Product Name</label>
+                        <input
+                          type="text"
+                          value={overlayProductName}
+                          onChange={(e) => setOverlayProductName(e.target.value)}
+                          placeholder="TWO TONE BOX HANDBAG"
+                          className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+
+                      {/* Prices Row */}
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-brand-400 block mb-1">Original Price</label>
+                          <input
+                            type="text"
+                            value={overlayOriginalPrice}
+                            onChange={(e) => setOverlayOriginalPrice(e.target.value)}
+                            placeholder="4,750"
+                            className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[10px] text-brand-400 block mb-1">Sale Price</label>
+                          <input
+                            type="text"
+                            value={overlaySalePrice}
+                            onChange={(e) => setOverlaySalePrice(e.target.value)}
+                            placeholder="1,550"
+                            className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Position & Watermark Row */}
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="text-[10px] text-brand-400 block mb-1">Position</label>
+                          <select
+                            value={overlayPosition}
+                            onChange={(e) => setOverlayPosition(e.target.value as 'top-left' | 'center' | 'bottom-left')}
+                            className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none"
+                          >
+                            <option value="top-left">Top Left</option>
+                            <option value="center">Center</option>
+                            <option value="bottom-left">Bottom Left</option>
+                          </select>
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[10px] text-brand-400 block mb-1">Watermark</label>
+                          <input
+                            type="text"
+                            value={overlayWatermark}
+                            onChange={(e) => setOverlayWatermark(e.target.value)}
+                            placeholder="yourbrand.com"
+                            className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Text Color Picker */}
+                      <div className="flex items-center gap-3">
+                        <label className="text-[10px] text-brand-400 whitespace-nowrap">Text Color</label>
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="color"
+                            value={overlayTextColor}
+                            onChange={(e) => setOverlayTextColor(e.target.value)}
+                            className="w-8 h-8 rounded cursor-pointer border border-brand-600 bg-transparent"
+                          />
+                          <div className="flex gap-1">
+                            {['#ffffff', '#000000', '#f5f5dc', '#1a1a2e'].map((color) => (
+                              <button
+                                key={color}
+                                onClick={() => setOverlayTextColor(color)}
+                                className={`w-6 h-6 rounded border-2 ${overlayTextColor === color ? 'border-brand-500' : 'border-brand-700'}`}
+                                style={{ backgroundColor: color }}
+                                title={color}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Upscale + Download Row */}
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={shouldUpscale}
+                            onChange={(e) => setShouldUpscale(e.target.checked)}
+                            className="rounded border-gray-600 bg-brand-900 text-brand-500 focus:ring-brand-500 w-3 h-3"
+                          />
+                          <span className="text-[10px] text-brand-300 font-medium whitespace-nowrap">Upscale (2x)</span>
+                        </label>
+                        <button
+                          onClick={() => handleDownloadWithOverlay(activeAsset)}
+                          disabled={isUpscaling}
+                          className="flex-1 bg-gradient-to-r from-brand-500 to-purple-500 text-white text-xs font-bold rounded px-3 py-2 flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-95 disabled:opacity-70"
+                        >
+                          {isUpscaling ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                          {isUpscaling ? 'Processing...' : 'Download Ad Creative'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Mobile Action Bar (Fallback) */}

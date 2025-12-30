@@ -10,6 +10,7 @@ export enum AspectRatio {
 export type CameraAngle = 'eye-level' | 'low-angle' | 'high-angle' | 'side-angle';
 export type CameraFraming = 'wide' | 'medium' | 'close-up';
 export type ModelPose = 'generic' | 'standing' | 'walking' | 'sitting' | 'leaning';
+export type ProductType = 'top' | 'bottom' | 'full-outfit' | 'accessory';
 
 export interface AvatarPreset {
   id: string;

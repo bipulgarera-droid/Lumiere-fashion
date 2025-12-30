@@ -32,7 +32,7 @@ const generateSingleImage = async (
       });
     }
 
-    console.log('Sending request to Gemini Nano Banana Pro...');
+    console.log('Sending request to Gemini 3 Pro Image...');
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
       contents: { parts },
