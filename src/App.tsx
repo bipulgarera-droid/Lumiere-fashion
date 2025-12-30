@@ -370,9 +370,8 @@ const App: React.FC = () => {
           
           ${highFidelityMode
             ? highFiStyle
-            : `STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture.
-           CRITICAL: Generate a BORDERLESS, FULL-BLEED image. The photo should fill the entire canvas edge-to-edge.
-           Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text overlays, watermarks.`
+            : `CRITICAL OUTPUT REQUIREMENT: Generate a BORDERLESS, FULL-BLEED image with NO FRAMES. The photograph must fill the entire canvas edge-to-edge. NO film borders, NO film strips, NO sprocket holes, NO Kodak/Portra film frames, NO date stamps, NO margins of any color.
+           STYLE INSPIRATION ONLY (do NOT add film frames): Natural light aesthetic inspired by 35mm film photography. Authentic skin texture, candid movement, subtle grain.`
           }
           
           ${photoRealismNote}
@@ -406,12 +405,12 @@ const App: React.FC = () => {
            
            ${highFidelityMode
             ? highFiStyle
-            : 'STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture, unretouched aesthetic, depth of field. CRITICAL: Generate a BORDERLESS, FULL-BLEED image.'
+            : 'CRITICAL OUTPUT REQUIREMENT: Generate a BORDERLESS, FULL-BLEED image with NO FRAMES. NO film borders, NO film strips, NO sprocket holes, NO Kodak/Portra film frames, NO date stamps, NO margins. STYLE INSPIRATION ONLY: Natural light aesthetic inspired by 35mm film photography with subtle grain.'
           }
            
            ${highFidelityMode
             ? highFiAvoid
-            : 'Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text, watermarks, branding, CGI, airbrushed, artificial lighting, plastic skin, over-sharpened, commercial catalog look.'
+            : 'Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text, watermarks, branding, CGI, airbrushed, plastic skin.'
           }
            
            ${photoRealismNote}
