@@ -675,6 +675,8 @@ const App: React.FC = () => {
       ———————————————————————
       
       FINAL OUTPUT: A fashion photo shot from ${detailedAngle} angle with ${smartFraming} framing, model in ${poseLabel} pose.
+      
+      IMPORTANT: IMAGE MUST BE 100% BORDERLESS. NO FILM FRAMES. NO KODAK BORDERS.
     `.trim();
 
     try {
