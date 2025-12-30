@@ -34,6 +34,7 @@ export interface GeneratedAsset {
   // Metadata for remixing/resizing
   originalImage: string;
   avatarId?: string;
+  modelId?: string; // ID of the saved model used for consistency
   settingId?: string;
   customPrompt: string;
   isShortlisted?: boolean;

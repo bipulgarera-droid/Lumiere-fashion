@@ -2,30 +2,40 @@ import { GoogleGenAI } from "@google/genai";
 import { AspectRatio } from "../types";
 
 // Initialize the client. 
-// Note: In a real production app, ensure this is handled securely.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 const generateSingleImage = async (
-  cleanBase64: string,
+  productBase64: string,
   promptText: string,
-  aspectRatio: AspectRatio
+  aspectRatio: AspectRatio,
+  modelBase64?: string
 ): Promise<string> => {
   try {
+    const parts: any[] = [
+      { text: promptText },
+      {
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: productBase64
+        }
+      }
+    ];
+
+    // Add model reference image if provided
+    if (modelBase64) {
+      console.log('Adding model character reference to parts');
+      parts.push({
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: modelBase64
+        }
+      });
+    }
+
+    console.log('Sending request to Gemini Nano Banana Pro...');
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
-      contents: {
-        parts: [
-          {
-            text: promptText,
-          },
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: cleanBase64
-            }
-          }
-        ]
-      },
+      contents: { parts },
       config: {
         imageConfig: {
           aspectRatio: aspectRatio,
@@ -33,11 +43,11 @@ const generateSingleImage = async (
       }
     });
 
-    // Parse response
     if (response.candidates && response.candidates.length > 0) {
       const parts = response.candidates[0].content.parts;
       for (const part of parts) {
         if (part.inlineData && part.inlineData.data) {
+          console.log('Gemini successfully generated image data');
           return `data:image/png;base64,${part.inlineData.data}`;
         }
       }
@@ -45,34 +55,109 @@ const generateSingleImage = async (
     throw new Error("No image data found in response.");
   } catch (error) {
     console.error("Gemini Single Generation Error:", error);
+    // Extract detailed error if possible
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      throw new Error(`Gemini Error: ${error.message}`);
+    }
     throw error;
   }
 }
+
+// Helper to fetch an image and return its base64 data
+const imageToBase64 = async (urlOrBase64: string): Promise<string> => {
+  if (urlOrBase64.includes('base64,')) {
+    return urlOrBase64.split('base64,')[1];
+  }
+
+  console.log('Converting image URL to base64:', urlOrBase64);
+  const response = await fetch(urlOrBase64);
+  if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+  const blob = await response.blob();
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      resolve(result.split('base64,')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+// Helper to resize and compress image to reduce payload size
+const optimizeImage = async (base64Str: string, maxWidth = 1024): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = `data:image/jpeg;base64,${base64Str}`;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      // Calculate new dimensions
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+      // specific JPEG compression to reduce size
+      const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      resolve(optimizedDataUrl.split('base64,')[1]);
+    };
+    img.onerror = (e) => reject(new Error('Image optimization failed to load source'));
+  });
+};
 
 export const generateFashionAssets = async (
   imageBase64: string,
   promptText: string,
   aspectRatio: AspectRatio,
-  count: number = 3
+  count: number = 3,
+  modelBase64?: string
 ): Promise<string[]> => {
   if (!process.env.API_KEY) {
     throw new Error("API Key is missing. Please set process.env.API_KEY.");
   }
 
-  // Handle both raw Base64 strings and Data URLs safely
-  let cleanBase64 = imageBase64;
-  if (imageBase64.includes('base64,')) {
-    cleanBase64 = imageBase64.split('base64,')[1];
-  }
-
-  // Create parallel requests for 'count' number of images
-  const promises = Array(count).fill(null).map(() => generateSingleImage(cleanBase64, promptText, aspectRatio));
-
   try {
-    const results = await Promise.all(promises);
+    // 1. Clean & Optimize product image
+    const rawProductBase64 = imageBase64.includes('base64,')
+      ? imageBase64.split('base64,')[1]
+      : imageBase64;
+
+    console.log('Optimizing product image...');
+    const cleanProductBase64 = await optimizeImage(rawProductBase64);
+
+    // 2. Use provided model base64 directly (and optimize it)
+    let cleanModelBase64: string | undefined;
+    if (modelBase64) {
+      console.log('Optimizing model image...');
+      cleanModelBase64 = await optimizeImage(modelBase64);
+    }
+
+    console.log(`Starting generation of ${count} assets...`);
+    // Use sequential or controlled parallel requests to avoid rate limits with larger inputs
+    const results: string[] = [];
+    for (let i = 0; i < count; i++) {
+      console.log(`Generating image ${i + 1} of ${count}`);
+      const result = await generateSingleImage(cleanProductBase64, promptText, aspectRatio, cleanModelBase64);
+      results.push(result);
+    }
+
     return results;
   } catch (error) {
-    console.error("Batch Generation Error:", error);
+    console.error('Asset Generation Pipeline failed:', error);
     throw error;
   }
 };

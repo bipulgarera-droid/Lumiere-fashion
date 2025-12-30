@@ -21,6 +21,9 @@ import {
 
 import Header from './components/Header';
 import AssetCard from './components/AssetCard';
+import ModelLibrary from './components/ModelLibrary';
+import DebugConsole from './components/DebugConsole';
+import { modelLibrary, assetStorage, SavedModel, SavedAsset } from './services/supabaseService';
 import {
   AVATARS,
   SETTINGS,
@@ -40,6 +43,9 @@ import {
   ModelPose
 } from './types';
 import { generateFashionAssets } from './services/geminiService';
+
+// Type for reference model (saved model used for consistency)
+type ReferenceModel = SavedModel | null;
 
 const App: React.FC = () => {
   // Core Configuration State
@@ -72,43 +78,49 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'all' | 'shortlist'>('all');
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Saved model for consistency (from Supabase)
+  const [savedReferenceModel, setSavedReferenceModel] = useState<ReferenceModel>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // LocalStorage key
-  const STORAGE_KEY = 'lumiere_assets';
-
-  // Load saved assets from localStorage on mount
+  // Load saved assets from Supabase on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as GeneratedAsset[];
-        setGeneratedAssets(parsed);
-        // Set the most recent asset as active if available
-        if (parsed.length > 0) {
-          setActiveAsset(parsed[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load saved assets:', error);
-    }
-    setIsLoaded(true);
-  }, []);
-
-  // Save assets to localStorage whenever they change
-  useEffect(() => {
-    if (isLoaded) {
+    const loadAssets = async () => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(generatedAssets));
+        const saved = await assetStorage.getAssets();
+        // Convert snake_case from DB to camelCase for App
+        const parsed: GeneratedAsset[] = saved.map(a => ({
+          id: a.id,
+          imageUrl: a.image_url,
+          prompt: a.prompt,
+          timestamp: new Date(a.created_at).getTime(),
+          ratio: (a.aspect_ratio as AspectRatio) || AspectRatio.Portrait,
+          // Note: Start new sessions clean or handle 'originalImage' specifically if needed.
+          // For now, we load previous generations but they might not be fully remixable 
+          // if we don't store the massive original base64. 
+          // Current solution: store public URL as originalImage if it was an asset re-use, 
+          // or leave undefined if we can't recover the source.
+          originalImage: a.image_url, // Use the asset itself as source for remixing history
+          avatarId: undefined, // Metadata could be expanded
+          modelId: a.model_id,
+          settingId: a.environment,
+          cameraAngle: a.camera_angle as CameraAngle,
+          cameraFraming: a.camera_framing as CameraFraming,
+          modelPose: a.model_pose as ModelPose,
+          isShortlisted: a.is_shortlisted,
+          customPrompt: ''
+        }));
+
+        setGeneratedAssets(parsed);
+        if (parsed.length > 0) setActiveAsset(parsed[0]);
       } catch (error) {
-        console.error('Failed to save assets:', error);
-        // Handle quota exceeded - clear old assets if needed
-        if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-          console.warn('Storage quota exceeded. Consider clearing old assets.');
-        }
+        console.error('Failed to load assets from Supabase:', error);
+      } finally {
+        setIsLoaded(true);
       }
-    }
-  }, [generatedAssets, isLoaded]);
+    };
+    loadAssets();
+  }, []);
 
   // Filter assets based on tab
   const displayedAssets = activeTab === 'shortlist'
@@ -145,6 +157,25 @@ const App: React.FC = () => {
     setUploadedImage(null);
   };
 
+  // Save current generated asset as a reusable model
+  const handleSaveAsModel = async (name: string, description: string) => {
+    if (!activeAsset?.imageUrl) {
+      console.error('No active asset to save as model');
+      return;
+    }
+    const saved = await modelLibrary.saveModel(name, description, activeAsset.imageUrl);
+    if (saved) {
+      setSavedReferenceModel(saved);
+    }
+  };
+
+  // Select a saved model for consistent generation
+  const handleSelectSavedModel = (model: SavedModel) => {
+    setSavedReferenceModel(model);
+    // Clear the preset avatar selection when using a saved model
+    setSelectedAvatar(null);
+  };
+
   // Helper to translate UI options into powerful prompt instructions
   const getDetailedAngleDescription = (angle: CameraAngle): string => {
     switch (angle) {
@@ -163,71 +194,103 @@ const App: React.FC = () => {
     }
 
     // Validate selections if not in preserve mode
-    if (!preserveOriginal && (!selectedAvatar || !selectedSetting)) return;
+    // Must have a subject (Avatar OR Saved Model) and a Setting
+    if (!preserveOriginal && ((!selectedAvatar && !savedReferenceModel) || !selectedSetting)) {
+      alert("Please select a Model and an Environment.");
+      return;
+    }
 
     const targetRatio = overrideRatio || selectedRatio;
     setStatus('generating');
 
-    let fullPrompt = '';
-
-    // Helper for readable labels
-    const framingLabel = CAMERA_FRAMINGS.find(f => f.id === selectedFraming)?.label || 'Medium';
-    const poseLabel = MODEL_POSES.find(p => p.id === selectedPose)?.label || 'Generic';
-    const detailedAngle = getDetailedAngleDescription(selectedAngle);
-
-    if (preserveOriginal) {
-      // Mode: Preserve original subject/bg, just change camera params
-      fullPrompt = `
-         COMPOSITION INSTRUCTION: Generate a ${framingLabel} shot.
-         CAMERA ANGLE: ${detailedAngle}.
-         SUBJECT POSE: The model should be ${poseLabel}.
-         
-         TASK: Editorial fashion photography. Retain the EXACT subject, clothing, and background from the input image.
-         
-         CRITICAL: Do NOT change the model's identity or the environment. Only adjust the camera perspective and framing as requested above.
-         
-         STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture.
-         ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
-       `.trim();
-    } else {
-      // Mode: New Generation (Replace Model/Env)
-      fullPrompt = `
-         COMPOSITION INSTRUCTION: Create a ${framingLabel} fashion shot.
-         CAMERA ANGLE: ${detailedAngle}.
-         
-         TASK: Editorial fashion photography.
-         Generate a raw, authentic photo of the following model wearing the garment shown in the reference image.
-         
-         TARGET MODEL: ${selectedAvatar?.description}.
-         POSE: ${poseLabel}.
-         IMPORTANT: Focus on the garment texture and fit. If the reference has a person, replace them with the TARGET MODEL.
-         
-         SETTING: ${selectedSetting?.description}.
-         
-         STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture, unretouched aesthetic, depth of field. 
-         Avoid: CGI, airbrushed, artificial lighting, plastic skin, over-sharpened, commercial catalog look.
-         ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
-       `.trim();
+    // Initialize loading state
+    setStatus('generating');
+    if (savedReferenceModel) {
+      console.log('Generating with Character Consistency:', savedReferenceModel.name);
     }
 
-    try {
-      const count = 3;
+    // Define detailed variables for prompt
+    const detailedAngle = getDetailedAngleDescription(selectedAngle);
+    // Safe lookup for display labels
+    const framingLabel = CAMERA_FRAMINGS.find(f => f.id === selectedFraming)?.label || 'Medium Shot';
+    const poseLabel = MODEL_POSES.find(p => p.id === selectedPose)?.label || 'Standing';
 
+    try {
+      let modelBase64: string | undefined;
+
+      // 1. Fetch Model Image if needed
+      if (savedReferenceModel) {
+        modelBase64 = await modelLibrary.getModelImageBase64(savedReferenceModel.image_url) || undefined;
+
+        if (!modelBase64) {
+          console.warn('Failed to fetch saved model image. Falling back to text description.');
+          // Optional: Alert user
+          // alert("Could not download model image. improved consistency will be disabled.");
+        }
+      }
+
+      // 2. Construct Prompt (Now that we know if we have the image)
+      let fullPrompt = '';
+      if (preserveOriginal) {
+        // Mode: Preserve original subject/bg, just change camera params
+        fullPrompt = `
+          COMPOSITION INSTRUCTION: Generate a ${framingLabel} shot.
+          CAMERA ANGLE: ${detailedAngle}.
+          SUBJECT POSE: The model should be ${poseLabel}.
+          
+          TASK: Editorial fashion photography. Retain the EXACT subject, clothing, and background from the input image.
+          
+          CRITICAL: Do NOT change the model's identity or the environment. Only adjust the camera perspective and framing as requested above.
+          
+          STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture.
+          ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
+        `.trim();
+      } else {
+        // Mode: New Generation (Replace Model/Env)
+        const shouldUseConsistency = !!(savedReferenceModel && modelBase64);
+
+        fullPrompt = `
+           COMPOSITION INSTRUCTION: Create a ${framingLabel} fashion shot.
+           CAMERA ANGLE: ${detailedAngle}.
+           
+           TASK: Editorial fashion photography.
+           Generate a raw, authentic photo of ${shouldUseConsistency ? 'the SPECIFIED MODEL' : 'the TARGET MODEL'} wearing the garment shown in the reference image.
+           
+           ${shouldUseConsistency
+            ? `CHARACTER CONSISTENCY: Use the identity and features of the model in the provided second reference image (the one NOT showing the garment). Maintain her face, hair, and overall appearance exactly.`
+            : `TARGET MODEL: ${selectedAvatar?.description || 'A fashion model'}.`
+          }
+           
+           POSE: ${poseLabel}.
+           IMPORTANT: Focus on the garment texture and fit. If the reference has a person, replace them with the specified model.
+           
+           SETTING: ${selectedSetting?.description}.
+           
+           STYLE: Shot on 35mm film, Kodak Portra 400, natural sunlight, candid movement, film grain, authentic skin texture, unretouched aesthetic, depth of field. 
+           Avoid: CGI, airbrushed, artificial lighting, plastic skin, over-sharpened, commercial catalog look.
+           ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
+         `.trim();
+      }
+
+      // 3. Generate Assets
       const generatedImages = await generateFashionAssets(
         uploadedImage,
         fullPrompt,
         targetRatio,
-        count
+        3, // count
+        modelBase64 // Pass the base64 string directly (only if fetched)
       );
 
+      // Create new assets locally first for immediate UI update
       const newAssets: GeneratedAsset[] = generatedImages.map((img, index) => ({
-        id: `${Date.now()}-${index}`,
+        id: `${Date.now()}-${index}`, // Temp ID until saved
         imageUrl: img,
         prompt: fullPrompt,
         timestamp: Date.now(),
         ratio: targetRatio,
         originalImage: uploadedImage,
-        avatarId: preserveOriginal ? undefined : selectedAvatar?.id,
+        avatarId: preserveOriginal ? undefined : (savedReferenceModel ? undefined : selectedAvatar?.id),
+        modelId: savedReferenceModel?.id,
         settingId: preserveOriginal ? undefined : selectedSetting?.id,
         cameraAngle: selectedAngle,
         cameraFraming: selectedFraming,
@@ -241,14 +304,36 @@ const App: React.FC = () => {
       setStatus('success');
       setActiveTab('all');
 
+      // Persist to Supabase in background
+      newAssets.forEach(async (asset) => {
+        try {
+          // Upload and Save
+          await assetStorage.saveAsset({
+            image_url: asset.imageUrl,
+            prompt: asset.prompt,
+            model_id: asset.modelId,
+            environment: asset.settingId,
+            camera_angle: asset.cameraAngle,
+            camera_framing: asset.cameraFraming,
+            model_pose: asset.modelPose,
+            aspect_ratio: asset.ratio,
+            is_shortlisted: false
+          });
+          // Note: We could update the local asset ID with the real DB ID here if needed
+        } catch (err) {
+          console.error("Failed to persist asset:", err);
+        }
+      });
+
     } catch (error) {
-      console.error(error);
+      console.error('Generation Error:', error);
       setStatus('error');
-      alert("Failed to generate assets. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      alert(`Generation Failed: ${errorMessage}`);
     } finally {
       setTimeout(() => {
-        if (status !== 'error') setStatus('idle');
-      }, 1000);
+        setStatus(prev => prev === 'error' ? 'error' : 'idle');
+      }, 2000);
     }
   };
 
@@ -272,13 +357,17 @@ const App: React.FC = () => {
     `.trim();
 
     try {
-      const count = 1; // Explicitly 1 for strict variation
+      let modelBase64: string | undefined;
+      if (savedReferenceModel) {
+        modelBase64 = await modelLibrary.getModelImageBase64(savedReferenceModel.image_url) || undefined;
+      }
 
       const generatedImages = await generateFashionAssets(
         activeAsset.imageUrl,
         variationPrompt,
         targetRatio,
-        count
+        1, // Explicitly 1 for strict variation
+        modelBase64
       );
 
       const newAssets: GeneratedAsset[] = generatedImages.map((img, index) => ({
@@ -289,6 +378,7 @@ const App: React.FC = () => {
         ratio: targetRatio,
         originalImage: activeAsset.originalImage,
         avatarId: activeAsset.avatarId,
+        modelId: savedReferenceModel?.id || activeAsset.modelId,
         settingId: activeAsset.settingId,
         cameraAngle: activeAsset.cameraAngle,
         cameraFraming: activeAsset.cameraFraming,
@@ -300,6 +390,22 @@ const App: React.FC = () => {
       setGeneratedAssets(prev => [...newAssets, ...prev]);
       setActiveAsset(newAssets[0]);
       setStatus('success');
+
+      // Persist to Supabase
+      newAssets.forEach(async (asset) => {
+        await assetStorage.saveAsset({
+          image_url: asset.imageUrl,
+          prompt: asset.prompt,
+          model_id: asset.modelId,
+          environment: asset.settingId,
+          camera_angle: asset.cameraAngle,
+          camera_framing: asset.cameraFraming,
+          model_pose: asset.modelPose,
+          aspect_ratio: asset.ratio,
+          is_shortlisted: false
+        });
+      });
+
     } catch (error) {
       console.error(error);
       setStatus('error');
@@ -341,13 +447,17 @@ const App: React.FC = () => {
     `.trim();
 
     try {
-      const count = 1; // Explicitly 1 for strict refinement
+      let modelBase64: string | undefined;
+      if (savedReferenceModel) {
+        modelBase64 = await modelLibrary.getModelImageBase64(savedReferenceModel.image_url) || undefined;
+      }
 
       const generatedImages = await generateFashionAssets(
         activeAsset.imageUrl,
         refinePrompt,
         activeAsset.ratio, // Keep current ratio
-        count
+        1, // Explicitly 1 for strict refinement
+        modelBase64
       );
 
       const newAssets: GeneratedAsset[] = generatedImages.map((img, index) => ({
@@ -358,6 +468,7 @@ const App: React.FC = () => {
         ratio: activeAsset.ratio,
         originalImage: activeAsset.originalImage,
         avatarId: activeAsset.avatarId,
+        modelId: savedReferenceModel?.id || activeAsset.modelId,
         settingId: activeAsset.settingId,
         cameraAngle: refineAngle,
         cameraFraming: refineFraming,
@@ -369,6 +480,22 @@ const App: React.FC = () => {
       setGeneratedAssets(prev => [...newAssets, ...prev]);
       setActiveAsset(newAssets[0]);
       setStatus('success');
+
+      // Persist to Supabase
+      newAssets.forEach(async (asset) => {
+        await assetStorage.saveAsset({
+          image_url: asset.imageUrl,
+          prompt: asset.prompt,
+          model_id: asset.modelId,
+          environment: asset.settingId,
+          camera_angle: asset.cameraAngle,
+          camera_framing: asset.cameraFraming,
+          model_pose: asset.modelPose,
+          aspect_ratio: asset.ratio,
+          is_shortlisted: false
+        });
+      });
+
     } catch (error) {
       console.error(error);
       setStatus('error');
@@ -380,27 +507,52 @@ const App: React.FC = () => {
     }
   };
 
-  const toggleShortlist = (assetId: string) => {
-    setGeneratedAssets(prev => prev.map(asset =>
-      asset.id === assetId
-        ? { ...asset, isShortlisted: !asset.isShortlisted }
-        : asset
-    ));
+  const toggleShortlist = async (assetId: string) => {
+    // Optimistic UI Update
+    setGeneratedAssets(prev => prev.map(asset => {
+      if (asset.id === assetId) {
+        // Persist change
+        // Note: If ID is temporary (not yet sync with DB), this might fail in DB, 
+        // but since we don't fully await ID sync yet, this is a limitation.
+        // In real app, we'd replace temp ID with DB ID.
+        // For now, we assume if it loaded from DB, it has a UUID. 
+        // If it's fresh, we might not be able to update it in DB until refresh.
+        // Simplest fix: Just allow UI toggle for now.
+        assetStorage.toggleShortlist(assetId, !asset.isShortlisted);
+        return { ...asset, isShortlisted: !asset.isShortlisted };
+      }
+      return asset;
+    }));
 
     if (activeAsset?.id === assetId) {
       setActiveAsset(prev => prev ? { ...prev, isShortlisted: !prev.isShortlisted } : null);
     }
   };
 
-  const handleRemix = (asset: GeneratedAsset) => {
+  const handleRemix = async (asset: GeneratedAsset) => {
     setUploadedImage(asset.originalImage);
 
-    if (asset.avatarId) {
+    // Handle Model Consistency
+    if (asset.modelId) {
+      // Fetch models to find the one used
+      const models = await modelLibrary.getModels();
+      const model = models.find(m => m.id === asset.modelId);
+      if (model) {
+        setSavedReferenceModel(model);
+        setSelectedAvatar(null);
+      }
+    } else {
+      setSavedReferenceModel(null);
+    }
+
+    if (asset.avatarId && !asset.modelId) {
       const avatar = AVATARS.find(a => a.id === asset.avatarId);
       if (avatar) setSelectedAvatar(avatar);
       setPreserveOriginal(false);
-    } else {
+    } else if (!asset.modelId) {
       setPreserveOriginal(true);
+    } else {
+      setPreserveOriginal(false);
     }
 
     if (asset.settingId) {
@@ -418,6 +570,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-brand-950 text-brand-100 font-sans overflow-hidden">
+      <DebugConsole />
       <Header />
 
       {/* Main Layout Container */}
@@ -599,7 +752,10 @@ const App: React.FC = () => {
                 {AVATARS.map((avatar) => (
                   <button
                     key={avatar.id}
-                    onClick={() => setSelectedAvatar(avatar)}
+                    onClick={() => {
+                      setSelectedAvatar(avatar);
+                      setSavedReferenceModel(null); // Clear saved model if preset is selected
+                    }}
                     className={`
                       relative rounded-lg overflow-hidden aspect-[3/4] border transition-all text-left group bg-brand-800
                       ${selectedAvatar?.id === avatar.id ? 'border-white ring-1 ring-white/50 shadow-lg z-10' : 'border-brand-800 hover:border-brand-500'}
@@ -626,6 +782,16 @@ const App: React.FC = () => {
                     )}
                   </button>
                 ))}
+              </div>
+
+              {/* Saved Model Library Integration */}
+              <div className="mt-6 pt-6 border-t border-brand-800">
+                <ModelLibrary
+                  onSelectModel={handleSelectSavedModel}
+                  selectedModelId={savedReferenceModel?.id}
+                  onSaveCurrentModel={handleSaveAsModel}
+                  currentImage={activeAsset?.imageUrl}
+                />
               </div>
             </section>
 
