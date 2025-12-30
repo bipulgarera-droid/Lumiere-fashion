@@ -43,6 +43,7 @@ import {
   ModelPose
 } from './types';
 import { generateFashionAssets } from './services/geminiService';
+import { upscaleImage } from './services/upscaleService';
 
 // Type for reference model (saved model used for consistency)
 type ReferenceModel = SavedModel | null;
@@ -646,6 +647,55 @@ const App: React.FC = () => {
     }
   };
 
+  // Upscale State
+  const [shouldUpscale, setShouldUpscale] = useState(false);
+  const [isUpscaling, setIsUpscaling] = useState(false);
+
+  const handleDownload = async (asset: GeneratedAsset) => {
+    try {
+      let downloadUrl = asset.imageUrl;
+      let filename = `lumiere-${asset.id}.png`;
+
+      // 1. Check Upscale
+      if (shouldUpscale) {
+        setIsUpscaling(true);
+        try {
+          // Upscale returns a data-URI (base64) from UpscalerJS
+          downloadUrl = await upscaleImage(asset.imageUrl, "2x");
+          filename = `lumiere-${asset.id}-upscaled.png`;
+        } catch (error) {
+          console.error("Upscale failed:", error);
+          alert("Upscaling failed. Downloading original instead.");
+          // Fallback to original URL
+          downloadUrl = asset.imageUrl;
+        } finally {
+          setIsUpscaling(false);
+        }
+      }
+
+      // 2. Force Download using Blob (Fixes "Opens in Tab" issue for external URLs)
+      // We fetch the URL (whether it's the original HTTP Supabase URL or the base64 data-URI)
+      const response = await fetch(downloadUrl);
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up memory
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 100);
+
+    } catch (error) {
+      console.error("Download failed:", error);
+      // Desperate backup: Just open it
+      window.open(asset.imageUrl, '_blank');
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-brand-950 text-brand-100 font-sans overflow-hidden">
       <DebugConsole />
@@ -1040,13 +1090,25 @@ const App: React.FC = () => {
                 {/* 1. Top Action Bar: Download & Remix (Desktop) */}
                 <div className="hidden md:flex bg-brand-950 border border-brand-800 rounded-xl p-3 items-center justify-between gap-3 w-full shadow-lg">
                   <div className="flex items-center gap-3">
-                    <a
-                      href={activeAsset.imageUrl}
-                      download={`lumiere-${activeAsset.id}.png`}
-                      className="px-4 py-2 bg-white text-brand-950 rounded-lg hover:bg-gray-200 font-bold text-xs flex items-center gap-2 transition-colors"
-                    >
-                      <Download size={14} /> Download
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleDownload(activeAsset)}
+                        disabled={isUpscaling}
+                        className="px-4 py-2 bg-white text-brand-950 rounded-lg hover:bg-gray-200 font-bold text-xs flex items-center gap-2 transition-colors disabled:opacity-70 disabled:cursor-wait"
+                      >
+                        {isUpscaling ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                        {isUpscaling ? 'Upscaling...' : 'Download'}
+                      </button>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none px-2">
+                        <input
+                          type="checkbox"
+                          checked={shouldUpscale}
+                          onChange={(e) => setShouldUpscale(e.target.checked)}
+                          className="rounded border-gray-600 bg-brand-900 text-brand-500 focus:ring-brand-500 w-3 h-3"
+                        />
+                        <span className="text-[10px] text-brand-300 font-medium whitespace-nowrap">Upscale (2x)</span>
+                      </label>
+                    </div>
                     <button
                       onClick={() => handleRemix(activeAsset)}
                       className="px-4 py-2 bg-brand-800 text-white rounded-lg hover:bg-brand-700 font-medium text-xs flex items-center gap-2 transition-colors"
