@@ -1027,11 +1027,15 @@ const App: React.FC = () => {
 
         if (overlayOriginalPrice && overlaySalePrice) {
           // BOTH prices → Original with RED strikethrough + Sale price bold
+          ctx.save(); // Save state for opacity
           ctx.font = `400 ${priceSize}px "Inter", sans-serif`;
-          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.fillStyle = overlayTextColor; // USE SELECTED COLOR
+          ctx.globalAlpha = 0.6; // Make it 60% opacity of the selected color
+
           const originalText = `₹${overlayOriginalPrice}`;
           const originalWidth = ctx.measureText(originalText).width;
           ctx.fillText(originalText, textX, priceY);
+          ctx.restore(); // Restore opacity to 1.0
 
           // RED Strikethrough line
           ctx.beginPath();
