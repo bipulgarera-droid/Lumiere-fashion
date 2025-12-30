@@ -102,7 +102,9 @@ const App: React.FC = () => {
   const [overlayWatermark, setOverlayWatermark] = useState('');
   const [overlayPosition, setOverlayPosition] = useState<'top-left' | 'top-right' | 'center' | 'bottom-left' | 'bottom-right'>('bottom-left');
   const [overlayTextColor, setOverlayTextColor] = useState('#ffffff');
-  const [overlayWatermarkColor, setOverlayWatermarkColor] = useState('#ffffff'); // New watermark color state
+  const [overlayWatermarkColor, setOverlayWatermarkColor] = useState('#ffffff');
+  const [overlayFontSize, setOverlayFontSize] = useState<'small' | 'medium' | 'large'>('medium'); // New Font Size
+  const [overlayFontFamily, setOverlayFontFamily] = useState<'Inter' | 'Playfair Display' | 'Roboto' | 'Montserrat'>('Inter'); // New Font Family
   const [showOverlayPanel, setShowOverlayPanel] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -967,15 +969,19 @@ const App: React.FC = () => {
         ctx.textAlign = 'right';
       }
 
+      // 5. Calculate Font Settings
+      let fontScale = 1.0;
+      if (overlayFontSize === 'small') fontScale = 0.8;
+      if (overlayFontSize === 'large') fontScale = 1.25;
+
+      const fontFamilyStr = `"${overlayFontFamily}", sans-serif`;
+
       // 5. Draw product name (if provided) - ALL BOLD
-      let productNameBottomY = textY; // Track bottom of product name
+      let productNameBottomY = textY;
       if (overlayProductName) {
-        const fontSize = Math.round(img.width * 0.04);
-        ctx.font = `700 ${fontSize}px "Inter", sans-serif`;
+        const fontSize = Math.round(img.width * 0.04 * fontScale);
+        ctx.font = `700 ${fontSize}px ${fontFamilyStr}`;
         ctx.fillStyle = overlayTextColor;
-        // Shadow removed for cleaner look as per user request
-        // ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        // ctx.shadowBlur = 4;
 
         // Split into lines ONLY if > 16 chars
         let line1 = overlayProductName;
@@ -989,10 +995,9 @@ const App: React.FC = () => {
         }
 
         ctx.fillText(line1, textX, textY);
-        productNameBottomY = textY; // Bottom of first line roughly
+        productNameBottomY = textY;
 
         if (line2) {
-          // Tighter line height (1.1x instead of 1.2x)
           ctx.fillText(line2, textX, textY + fontSize * 1.1);
           productNameBottomY = textY + fontSize * 1.1;
         }
@@ -1001,12 +1006,11 @@ const App: React.FC = () => {
       // 6. Draw Subheader (if provided)
       let subheaderBottomY = productNameBottomY;
       if (overlaySubheader) {
-        const subheaderSize = Math.round(img.width * 0.025); // Smaller than title
-        ctx.font = `400 ${subheaderSize}px "Inter", sans-serif`;
+        const subheaderSize = Math.round(img.width * 0.025 * fontScale);
+        ctx.font = `400 ${subheaderSize}px ${fontFamilyStr}`;
         ctx.fillStyle = overlayTextColor;
 
-        // Spacing: We need to move down by (Font Height + Padding)
-        // Previous baseline (productNameBottomY) -> New baseline
+        // Spacing logic
         const padding = Math.round(img.width * 0.015);
         const spacing = overlayProductName ? (subheaderSize + padding) : 0;
         subheaderBottomY = productNameBottomY + spacing;
@@ -1016,65 +1020,61 @@ const App: React.FC = () => {
 
       // 7. Draw prices (if provided)
       if (overlaySalePrice || overlayOriginalPrice) {
-        const priceSize = Math.round(img.width * 0.035);
+        const priceSize = Math.round(img.width * 0.035 * fontScale);
 
-        // Calculate Y position based on what's above it
-        // We must add the Font Height of the PRICE to the previous baseline
-        const padding = Math.round(img.width * 0.02); // Clean gap
+        const padding = Math.round(img.width * 0.02);
         const offset = overlaySubheader ? (priceSize + padding) : (priceSize + padding * 2);
 
         const priceY = subheaderBottomY + offset;
 
         if (overlayOriginalPrice && overlaySalePrice) {
-          // BOTH prices → Original with RED strikethrough + Sale price bold
-          ctx.save(); // Save state for opacity
-          ctx.font = `400 ${priceSize}px "Inter", sans-serif`;
-          ctx.fillStyle = overlayTextColor; // USE SELECTED COLOR
-          ctx.globalAlpha = 0.6; // Make it 60% opacity of the selected color
+          ctx.save();
+          ctx.font = `400 ${priceSize}px ${fontFamilyStr}`;
+          ctx.fillStyle = overlayTextColor;
+          ctx.globalAlpha = 0.6;
 
           const originalText = `₹${overlayOriginalPrice}`;
           const originalWidth = ctx.measureText(originalText).width;
           ctx.fillText(originalText, textX, priceY);
-          ctx.restore(); // Restore opacity to 1.0
+          ctx.restore();
 
           // RED Strikethrough line
           ctx.beginPath();
           ctx.moveTo(textX, priceY - priceSize * 0.3);
           ctx.lineTo(textX + originalWidth, priceY - priceSize * 0.3);
-          ctx.strokeStyle = '#ef4444'; // Red color
+          ctx.strokeStyle = '#ef4444';
           ctx.lineWidth = 2;
           ctx.stroke();
 
           // Sale price - BOLD
-          ctx.font = `700 ${priceSize * 1.2}px "Inter", sans-serif`;
-          ctx.fillStyle = overlayTextColor; // User-selected color
+          ctx.font = `700 ${priceSize * 1.2}px ${fontFamilyStr}`;
+          ctx.fillStyle = overlayTextColor;
           ctx.fillText(`₹${overlaySalePrice}`, textX + originalWidth + 15, priceY);
         } else {
-          // ONLY ONE price (no sale = no strikethrough) → Show as BOLD normal price
+          // ONLY ONE price
           const thePrice = overlaySalePrice || overlayOriginalPrice;
-          ctx.font = `700 ${priceSize}px "Inter", sans-serif`;
-          ctx.fillStyle = overlayTextColor; // User-selected color
+          ctx.font = `700 ${priceSize}px ${fontFamilyStr}`;
+          ctx.fillStyle = overlayTextColor;
           ctx.fillText(`₹${thePrice}`, textX, priceY);
         }
       }
 
       // 8. Draw watermark (if provided) - VERTICAL on right edge
       if (overlayWatermark) {
-        const wmSize = Math.round(img.width * 0.018);
-        ctx.save(); // Save current state before rotation
+        const wmSize = Math.round(img.width * 0.018 * fontScale);
+        ctx.save();
 
-        // Move to right side, vertically centered
         ctx.translate(img.width - padding / 2, img.height / 2);
-        ctx.rotate(-Math.PI / 2); // Rotate 90° counter-clockwise (text reads bottom-to-top)
+        ctx.rotate(-Math.PI / 2);
 
-        ctx.font = `400 ${wmSize}px "Inter", sans-serif`;
-        ctx.fillStyle = overlayWatermarkColor; // Use DISTINCT watermark color
+        ctx.font = `400 ${wmSize}px ${fontFamilyStr}`;
+        ctx.fillStyle = overlayWatermarkColor;
         ctx.textAlign = 'center';
         ctx.shadowColor = 'rgba(0,0,0,0.3)';
         ctx.shadowBlur = 2;
         ctx.fillText(overlayWatermark, 0, 0);
 
-        ctx.restore(); // Restore to original state
+        ctx.restore();
       }
 
       // 8. Export (and optionally upscale) and download
@@ -1721,6 +1721,48 @@ const App: React.FC = () => {
                             placeholder="yourbrand.com"
                             className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none"
                           />
+                        </div>
+                      </div>
+
+                      {/* Typography Row (NEW) */}
+                      <div className="flex gap-2">
+                        {/* Font Size */}
+                        <div className="flex-1">
+                          <label className="text-[10px] text-brand-400 block mb-1">Font Size</label>
+                          <div className="flex bg-brand-950 border border-brand-600 rounded overflow-hidden">
+                            {/* Small */}
+                            <button
+                              onClick={() => setOverlayFontSize('small')}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'small' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                            >Sm</button>
+                            <div className="w-[1px] bg-brand-800"></div>
+                            {/* Medium */}
+                            <button
+                              onClick={() => setOverlayFontSize('medium')}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'medium' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                            >Md</button>
+                            <div className="w-[1px] bg-brand-800"></div>
+                            {/* Large */}
+                            <button
+                              onClick={() => setOverlayFontSize('large')}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'large' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                            >Lg</button>
+                          </div>
+                        </div>
+
+                        {/* Font Family */}
+                        <div className="flex-[1.5]">
+                          <label className="text-[10px] text-brand-400 block mb-1">Font Family</label>
+                          <select
+                            value={overlayFontFamily}
+                            onChange={(e) => setOverlayFontFamily(e.target.value as any)}
+                            className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none"
+                          >
+                            <option value="Inter">Classic Sans</option>
+                            <option value="Playfair Display">Elegant Serif</option>
+                            <option value="Montserrat">Modern Sans</option>
+                            <option value="Roboto">Neutral Sans</option>
+                          </select>
                         </div>
                       </div>
 
