@@ -103,8 +103,64 @@ const App: React.FC = () => {
   const [overlayPosition, setOverlayPosition] = useState<'top-left' | 'top-right' | 'center' | 'bottom-left' | 'bottom-right'>('bottom-left');
   const [overlayTextColor, setOverlayTextColor] = useState('#ffffff');
   const [overlayWatermarkColor, setOverlayWatermarkColor] = useState('#ffffff');
-  const [overlayFontSize, setOverlayFontSize] = useState<'small' | 'medium' | 'large'>('medium'); // New Font Size
-  const [overlayFontFamily, setOverlayFontFamily] = useState<'Inter' | 'Playfair Display' | 'Roboto' | 'Montserrat'>('Inter'); // New Font Family
+  const [overlayFontSize, setOverlayFontSize] = useState<number>(12); // Numeric Font Size (Default 12)
+  const [overlayFontFamily, setOverlayFontFamily] = useState<'Inter' | 'Playfair Display' | 'Roboto' | 'Montserrat' | 'Lato' | 'Oswald' | 'Merriweather' | 'Raleway'>('Inter');
+
+  // ... (inside drawAdCreative) ...
+
+  // 5. Calculate Font Settings
+  // Base scale: 12 is the "standard" (1.0x)
+  const fontScale = overlayFontSize / 12;
+
+  const fontFamilyStr = `"${overlayFontFamily}", sans-serif`;
+
+  // ... (inside JSX) ...
+
+  {/* Typography Row (NEW) */ }
+  <div className="flex gap-2">
+    {/* Font Size */}
+    <div className="flex-1">
+      <label className="text-[10px] text-brand-400 block mb-1">Font Size</label>
+      <div className="relative">
+        <select
+          value={overlayFontSize}
+          onChange={(e) => setOverlayFontSize(Number(e.target.value))}
+          className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none appearance-none"
+        >
+          {[8, 10, 12, 14, 16, 18, 20, 24, 30, 36, 48].map(size => (
+            <option key={size} value={size}>{size}px</option>
+          ))}
+        </select>
+        <div className="absolute right-2 top-1.5 pointer-events-none text-brand-400">
+          <ChevronDown size={12} />
+        </div>
+      </div>
+    </div>
+
+    {/* Font Family */}
+    <div className="flex-[1.5]">
+      <label className="text-[10px] text-brand-400 block mb-1">Font Family</label>
+      <div className="relative">
+        <select
+          value={overlayFontFamily}
+          onChange={(e) => setOverlayFontFamily(e.target.value as any)}
+          className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none appearance-none"
+        >
+          <option value="Inter">Inter (Default)</option>
+          <option value="Roboto">Roboto</option>
+          <option value="Lato">Lato</option>
+          <option value="Montserrat">Montserrat</option>
+          <option value="Oswald">Oswald (Condensed)</option>
+          <option value="Playfair Display">Playfair (Serif)</option>
+          <option value="Merriweather">Merriweather (Serif)</option>
+          <option value="Raleway">Raleway</option>
+        </select>
+        <div className="absolute right-2 top-1.5 pointer-events-none text-brand-400">
+          <ChevronDown size={12} />
+        </div>
+      </div>
+    </div>
+  </div>
   const [showOverlayPanel, setShowOverlayPanel] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1727,28 +1783,11 @@ const App: React.FC = () => {
                       {/* Typography Row (NEW) */}
                       <div className="flex gap-2">
                         {/* Font Size */}
-                        <div className="flex-1">
-                          <label className="text-[10px] text-brand-400 block mb-1">Font Size</label>
-                          <div className="flex bg-brand-950 border border-brand-600 rounded overflow-hidden">
-                            {/* Small */}
-                            <button
-                              onClick={() => setOverlayFontSize('small')}
-                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'small' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
-                            >Sm</button>
-                            <div className="w-[1px] bg-brand-800"></div>
-                            {/* Medium */}
-                            <button
-                              onClick={() => setOverlayFontSize('medium')}
-                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'medium' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
-                            >Md</button>
-                            <div className="w-[1px] bg-brand-800"></div>
-                            {/* Large */}
-                            <button
-                              onClick={() => setOverlayFontSize('large')}
-                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'large' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
-                            >Lg</button>
-                          </div>
-                        </div>
+      // 5. Calculate Font Settings
+                        // Base scale: 12 is the "standard" (1.0x)
+                        const fontScale = overlayFontSize / 12;
+
+                        const fontFamilyStr = `"${overlayFontFamily}", sans-serif`;
 
                         {/* Font Family */}
                         <div className="flex-[1.5]">
