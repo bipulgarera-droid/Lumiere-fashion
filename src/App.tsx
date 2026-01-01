@@ -239,8 +239,8 @@ const App: React.FC = () => {
   // Helper to translate UI options into powerful prompt instructions
   const getDetailedAngleDescription = (angle: CameraAngle): string => {
     switch (angle) {
-      case 'eye-level': return "EYE LEVEL, camera positioned at the subject's eye height, horizontally straight-NOT looking up, NOT looking down";
-      case 'low-angle': return "LOW ANGLE, camera placed BELOW the subject looking UP at them, worm's-eye perspective";
+      case 'eye-level': return "EYE LEVEL, camera positioned at the subject's eye height, looking STRAIGHT at them. No tilt.";
+      case 'low-angle': return "LOW ANGLE, camera positioned BENEATH the subject's eye level, looking UP at them.";
       case 'high-angle': return "EXTREME HIGH ANGLE, camera placed SIGNIFICANTLY ABOVE the subject looking DOWN at them. Bird's-eye perspective. The floor must be clearly visible behind/around the subject.";
       case 'side-angle': return "SIDE PROFILE, 90-degree lateral view of the subject, profile silhouette";
       default: return "EYE LEVEL, camera at subject's eye height, horizontally straight";
@@ -350,6 +350,7 @@ const App: React.FC = () => {
         - Natural skin shine/oiliness, not matte plastic
         - Subtle imperfections: freckles, moles, slight redness
         - NO smooth AI-generated skin. NO airbrushed perfection. NO plastic look.
+        - SKIN FINISH: Natural skin texture with visible pores. NOT GLOSSY, NOT OILY. Natural satin finish.
         
         HAIR:
         - Individual hair strands visible, natural flyaways and baby hairs
@@ -520,9 +521,9 @@ const App: React.FC = () => {
            
            SETTING: ${selectedSetting?.description}.
            
-           CRITICAL OUTPUT REQUIREMENT: Generate a BORDERLESS, FULL-BLEED image with NO FRAMES. NO film borders, NO film strips, NO sprocket holes, NO Kodak/Portra film frames, NO date stamps, NO margins. STYLE INSPIRATION ONLY: Natural light aesthetic inspired by 35mm film photography with subtle grain.
+           CRITICAL OUTPUT REQUIREMENT: Generate a BORDERLESS, FULL-BLEED image with NO FRAMES. NO film borders, NO film strips, NO sprocket holes, NO Kodak/Portra film frames, NO date stamps, NO margins. STYLE: High-resolution professional digital photography. Sharp focus, natural lighting, realistic textures.
            
-           Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text, watermarks, branding, CGI, airbrushed, plastic skin.
+           Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text, watermarks, branding, CGI, airbrushed, plastic skin, excessive noise, film grain, blurry details.
            
            ${photoRealismNote}
            
@@ -608,19 +609,19 @@ const App: React.FC = () => {
     setStatus('generating');
 
     const variationPrompt = `
-      STRICT OUTPAINTING TASK-FILL THE ENTIRE CANVAS.
+      STRICT ASPECT RATIO CHANGE TASK:
       
-      Goal: Extend the background to fill aspect ratio ${targetRatio}.
+      ⚠️ CRITICAL - HOW TO HANDLE RESIZE:
+      When changing aspect ratio (e.g. from Landscape to Portrait, or Banner to Square):
+      1. MAINTAIN SUBJECT DISTANCE: Do NOT zoom out to fit more vertical space. Do NOT zoom in.
+      2. MAINTAIN SUBJECT SIZE: The subject must remain the SAME SIZE relative to the frame pixels.
+      3. CROP OR EXTEND ENVIRONMENT:
+         - If going WIDER: Extend the background (outpaint).
+         - If going TALLER/NARROWER: Crop the side edges of the environment.
+      4. DO NOT CHANGE THE CAMERA DISTANCE. The model should not look further away or closer.
       
       FATAL ERROR: DO NOT ADD WHITE BARS, BLACK BARS, OR COLORED BORDERS.
-      - If you add solid bars to the sides/top/bottom, THE TASK HAS FAILED.
-      - You MUST INVENT new background texture (floor, walls, sky) to fill the empty space.
-      - The output must be FULL-BLEED with NO MARGINS.
-      
-      CRITICAL:
-      1. NO WHITESPACE: The entire canvas must be filled with the scene.
-      2. PRESERVE COLOR: The output MUST Match the input's color grade 100%. NO TINT.
-      3. PIXEL-PERFECT SUBJECT: The central model/product must remain unchanged.
+      The output must be FULL-BLEED with NO MARGINS.
       
       ${PRODUCT_INTEGRITY_PROMPT}
       
@@ -629,7 +630,7 @@ const App: React.FC = () => {
       2. IGNORE BORDERS: If the input has borders, remove them. The output must be full-bleed.
       3. LIGHTING CONSISTENCY: New background areas must match the existing lighting direction and falloff.
       
-      The result should be the EXACT same photo, just seen through a wider/taller lens.
+      The result should be the EXACT same photo, just cropped or extended to fit the new size.
     `.trim();
 
     try {
