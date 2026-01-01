@@ -27,24 +27,33 @@ import ModelLibrary from './components/ModelLibrary';
 import DebugConsole from './components/DebugConsole';
 import { modelLibrary, assetStorage, SavedModel, SavedAsset } from './services/supabaseService';
 import {
-  AVATARS,
   SETTINGS,
   RATIO_LABELS,
   CAMERA_ANGLES,
   CAMERA_FRAMINGS,
   MODEL_POSES,
-  PRODUCT_TYPES
+  PRODUCT_TYPES,
+  BODY_TYPES,
+  AGE_RANGES,
+  ETHNICITIES,
+  HAIR_STYLES,
+  MODEL_EXPRESSIONS,
+  MODEL_REALISM_SUFFIX
 } from './constants';
 import {
   GeneratedAsset,
-  AvatarPreset,
   SettingPreset,
   AspectRatio,
   GenerationStatus,
   CameraAngle,
   CameraFraming,
   ModelPose,
-  ProductType
+  ProductType,
+  BodyType,
+  AgeRange,
+  Ethnicity,
+  HairStyle,
+  ModelExpression
 } from './types';
 import { generateFashionAssets } from './services/geminiService';
 import { upscaleImage } from './services/upscaleService';
@@ -52,28 +61,55 @@ import { upscaleImage } from './services/upscaleService';
 // Type for reference model (saved model used for consistency)
 type ReferenceModel = SavedModel | null;
 
+// CONSTANT PROMPTS
+const PRODUCT_INTEGRITY_PROMPT = `
+PRODUCT INTEGRITY (NON-NEGOTIABLE):
+The product from the reference image (garment, accessory, shoes, jewelry, bags, hats) must be reproduced with EXACT fidelity:
+- EXACT DETAILS: Buttons, zippers, hardware, pockets, stitching, logos, labels.
+- EXACT MATERIAL: Silk looks like silk, leather looks like leather, denim looks like denim.
+- EXACT COLOR: Match the precise hex values, hue, saturation, and brightness. No color shifting.
+- EXACT TEXTURE: Preserve fabric weave, leather grain, surface detail, sheen, and material properties.
+- EXACT STRUCTURE: Maintain the garment's construction, seams, stitching, and hardware.
+
+CRITICAL-FIT & SILHOUETTE (ABSOLUTE PRIORITY):
+- The fit/cut from the reference image is IMMUTABLE. It must not change.
+- UNIVERSAL CONSISTENCY: Regardless of the new setting, pose, or lighting, the garment's shape must remain identical.
+- If it is loose/oversized, it MUST look loose/oversized.
+- If it is tapered/structural, it MUST look tapered/structural.
+
+NATURAL INTEGRATION:
+- The garment must sit naturally on the model's body (respect gravity and physics). 
+- It must NOT look "abnormal" or "pasted on". It must fit the model realistically while maintaining its original cut.
+
+This is the single most important requirement. The product IS what is being photographed.
+`.trim();
+
 const App: React.FC = () => {
   // Core Configuration State
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
 
   // New State: Preserve Mode
   const [preserveOriginal, setPreserveOriginal] = useState<boolean>(false);
-  // New State: High Fidelity Mode (Color Accuracy)
-  const [highFidelityMode, setHighFidelityMode] = useState<boolean>(false);
 
-  // Camera & Pose Controls (Left Sidebar - Global)
+
+  // Camera & Pose Controls (Left Sidebar-Global)
   const [selectedAngle, setSelectedAngle] = useState<CameraAngle>('eye-level');
   const [selectedFraming, setSelectedFraming] = useState<CameraFraming>('wide');
   const [selectedPose, setSelectedPose] = useState<ModelPose>('generic');
   const [selectedProductType, setSelectedProductType] = useState<ProductType>('top');
 
-  // Refine Controls (Right Panel - Local)
+  // Refine Controls (Right Panel-Local)
   const [refineAngle, setRefineAngle] = useState<CameraAngle>('eye-level');
   const [refineFraming, setRefineFraming] = useState<CameraFraming>('medium');
   const [refinePose, setRefinePose] = useState<ModelPose>('standing');
 
-  // Conditional Configuration (Disabled if Preserve Mode is ON)
-  const [selectedAvatar, setSelectedAvatar] = useState<AvatarPreset | null>(AVATARS[0]);
+  // Model Builder State (replaces selectedAvatar)
+  const [selectedBodyType, setSelectedBodyType] = useState<BodyType>('slim');
+  const [selectedAge, setSelectedAge] = useState<AgeRange>('30s');
+  const [selectedEthnicity, setSelectedEthnicity] = useState<Ethnicity>('south-asian');
+  const [selectedHair, setSelectedHair] = useState<HairStyle>('long-wavy');
+  const [selectedExpression, setSelectedExpression] = useState<ModelExpression>('editorial');
+
   const [selectedSetting, setSelectedSetting] = useState<SettingPreset | null>(SETTINGS[0]);
 
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>(AspectRatio.Portrait);
@@ -105,61 +141,6 @@ const App: React.FC = () => {
   const [overlayWatermarkColor, setOverlayWatermarkColor] = useState('#ffffff');
   const [overlayFontSize, setOverlayFontSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [overlayFontFamily, setOverlayFontFamily] = useState<'Inter' | 'Playfair Display' | 'Roboto' | 'Montserrat' | 'Lato' | 'Oswald' | 'Merriweather' | 'Raleway'>('Inter');
-
-  // ... (inside drawAdCreative) ...
-
-  // ... (inside JSX) ...
-
-  {/* Typography Row (NEW) */ }
-  <div className="flex gap-2">
-    {/* Font Size */}
-    <div className="flex-1">
-      <label className="text-[10px] text-brand-400 block mb-1">Font Size</label>
-      <div className="flex bg-brand-950 border border-brand-600 rounded overflow-hidden">
-        {/* Small */}
-        <button
-          onClick={() => setOverlayFontSize('small')}
-          className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'small' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
-        >Sm</button>
-        <div className="w-[1px] bg-brand-800"></div>
-        {/* Medium */}
-        <button
-          onClick={() => setOverlayFontSize('medium')}
-          className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'medium' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
-        >Md</button>
-        <div className="w-[1px] bg-brand-800"></div>
-        {/* Large */}
-        <button
-          onClick={() => setOverlayFontSize('large')}
-          className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'large' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
-        >Lg</button>
-      </div>
-    </div>
-
-    {/* Font Family */}
-    <div className="flex-[1.5]">
-      <label className="text-[10px] text-brand-400 block mb-1">Font Family</label>
-      <div className="relative">
-        <select
-          value={overlayFontFamily}
-          onChange={(e) => setOverlayFontFamily(e.target.value as any)}
-          className="w-full bg-brand-950 border border-brand-600 text-brand-200 text-xs rounded px-2 py-1.5 focus:outline-none appearance-none"
-        >
-          <option value="Inter">Inter (Default)</option>
-          <option value="Roboto">Roboto</option>
-          <option value="Lato">Lato</option>
-          <option value="Montserrat">Montserrat</option>
-          <option value="Oswald">Oswald (Condensed)</option>
-          <option value="Playfair Display">Playfair (Serif)</option>
-          <option value="Merriweather">Merriweather (Serif)</option>
-          <option value="Raleway">Raleway</option>
-        </select>
-        <div className="absolute right-2 top-1.5 pointer-events-none text-brand-400">
-          <ChevronDown size={12} />
-        </div>
-      </div>
-    </div>
-  </div>
   const [showOverlayPanel, setShowOverlayPanel] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -253,19 +234,28 @@ const App: React.FC = () => {
   // Select a saved model for consistent generation
   const handleSelectSavedModel = (model: SavedModel) => {
     setSavedReferenceModel(model);
-    // Clear the preset avatar selection when using a saved model
-    setSelectedAvatar(null);
   };
 
   // Helper to translate UI options into powerful prompt instructions
   const getDetailedAngleDescription = (angle: CameraAngle): string => {
     switch (angle) {
-      case 'eye-level': return "EYE LEVEL, camera positioned at the subject's eye height, horizontally straight - NOT looking up, NOT looking down";
+      case 'eye-level': return "EYE LEVEL, camera positioned at the subject's eye height, horizontally straight-NOT looking up, NOT looking down";
       case 'low-angle': return "LOW ANGLE, camera placed BELOW the subject looking UP at them, worm's-eye perspective";
       case 'high-angle': return "EXTREME HIGH ANGLE, camera placed SIGNIFICANTLY ABOVE the subject looking DOWN at them. Bird's-eye perspective. The floor must be clearly visible behind/around the subject.";
       case 'side-angle': return "SIDE PROFILE, 90-degree lateral view of the subject, profile silhouette";
       default: return "EYE LEVEL, camera at subject's eye height, horizontally straight";
     }
+  };
+
+  // Build dynamic model description from selections
+  const buildModelDescription = (): string => {
+    const bodyPrompt = BODY_TYPES.find(b => b.id === selectedBodyType)?.prompt || '';
+    const agePrompt = AGE_RANGES.find(a => a.id === selectedAge)?.prompt || '';
+    const ethnicityPrompt = ETHNICITIES.find(e => e.id === selectedEthnicity)?.prompt || '';
+    const hairPrompt = HAIR_STYLES.find(h => h.id === selectedHair)?.prompt || '';
+    const expressionPrompt = MODEL_EXPRESSIONS.find(e => e.id === selectedExpression)?.prompt || '';
+
+    return `A ${bodyPrompt} ${ethnicityPrompt}, ${agePrompt}, with ${hairPrompt}, ${expressionPrompt}. ${MODEL_REALISM_SUFFIX}`;
   };
 
   // Original Generation Logic
@@ -276,9 +266,8 @@ const App: React.FC = () => {
     }
 
     // Validate selections if not in preserve mode
-    // Must have a subject (Avatar OR Saved Model) and a Setting
-    if (!preserveOriginal && ((!selectedAvatar && !savedReferenceModel) || !selectedSetting)) {
-      alert("Please select a Model and an Environment.");
+    if (!preserveOriginal && !selectedSetting) {
+      alert("Please select an Environment.");
       return;
     }
 
@@ -325,29 +314,11 @@ const App: React.FC = () => {
     const framingLabel = getSmartFramingDescription(selectedFraming, selectedProductType);
     const poseLabel = MODEL_POSES.find(p => p.id === selectedPose)?.label || 'Standing';
 
-    // Product priority instruction - ensures the product isn't cropped out
+    // Product priority instruction-ensures the product isn't cropped out
     const productPriorityNote = 'IMPORTANT: The PRODUCT/GARMENT from the reference image must ALWAYS be fully visible. Adjust framing as needed to ensure the entire garment is shown.';
 
-    // PRODUCT INTEGRITY - NON-NEGOTIABLE (applies to ALL generation types)
-    const productIntegrityNote = `
-      PRODUCT INTEGRITY (NON-NEGOTIABLE):
-      The product from the reference image (garment, accessory, shoes, bag, etc.) must be reproduced with EXACT fidelity:
-      - EXACT COLOR: Match the precise hex values, hue, saturation, and brightness. No color shifting.
-      - EXACT TEXTURE: Preserve fabric weave, leather grain, surface detail, sheen, and material properties.
-      - EXACT STRUCTURE: Maintain the garment's construction, seams, stitching, and hardware.
-      
-      CRITICAL - FIT & SILHOUETTE (ABSOLUTE PRIORITY):
-      - The fit/cut from the reference image is IMMUTABLE. It must not change.
-      - UNIVERSAL CONSISTENCY: Regardless of the new setting, pose, or lighting, the garment's shape must remain identical.
-      - If it is loose/oversized, it MUST look loose/oversized.
-      - If it is tapered/structural, it MUST look tapered/structural.
-      
-      NATURAL INTEGRATION:
-      - The garment must sit naturally on the model's body (respect gravity and physics). 
-      - It must NOT look "abnormal" or "pasted on". It must fit the model realistically while maintaining its original cut.
-      
-      This is the single most important requirement. The product IS what is being photographed.
-    `.trim();
+    // PRODUCT INTEGRITY-NON-NEGOTIABLE (applies to ALL generation types)
+    const productIntegrityNote = PRODUCT_INTEGRITY_PROMPT;
 
     try {
       let modelBase64: string | undefined;
@@ -366,38 +337,47 @@ const App: React.FC = () => {
       // 2. Construct Prompt (Now that we know if we have the image)
       let fullPrompt = '';
 
-      // High Fidelity Styles (Only used if mode is ON)
-      const highFiStyle = `STYLE: Modern High-End Digital Photography. Phase One XF IQ4 150MP, 80mm f/2.8 lens.
-           LIGHTING: Professional Studio Lighting. Softbox lighting setup, neutral 5600K white balance.
-           COLOR: 100% ACCURATE COLOR REPRODUCTION. Do not apply vintage filters, do not color grade, do not add film grain. 
-           The color of the garment must match the input image HEX code exactly. High fidelity textures.`;
 
-      const highFiAvoid = 'Avoid: Color shifting, vintage tints, cloudy haze, low contrast.';
 
-      // PHOTOREALISM - Anti-AI artifacts (used in ALL prompts)
+      // PHOTOREALISM-Anti-AI artifacts (used in ALL prompts)
       const photoRealismNote = `
-        PHOTOREALISM (CRITICAL - APPLIES TO EVERYTHING):
+        ⚠️ PHOTOREALISM (CRITICAL-THE MODEL MUST LOOK REAL, NOT AI-GENERATED):
         
-        MODEL must look like a REAL PERSON photographed with a camera:
-        - SKIN: Natural texture with visible pores, fine lines, subtle imperfections. No plastic/airbrushed skin.
-        - HAIR: Natural texture with individual strands, flyaways. No smooth CGI hair.
-        - EYES: Natural highlights and realistic iris detail. No uncanny/glassy eyes.
-        - BODY PROPORTIONS: Realistic, healthy proportions. Arms must have natural thickness and muscle definition. No unnaturally thin limbs, no elongated fingers, no distorted hands. Proper joint placement.
-        - HANDS/FINGERS: Correct number of fingers (5 per hand), natural hand poses, proper finger proportions.
+        SKIN TEXTURE (MOST IMPORTANT):
+        - Visible skin pores, especially on nose, forehead, and cheeks
+        - Natural fine lines and subtle wrinkles appropriate to age
+        - Subsurface scattering (skin translucency, light passing through ears)
+        - Natural skin shine/oiliness, not matte plastic
+        - Subtle imperfections: freckles, moles, slight redness
+        - NO smooth AI-generated skin. NO airbrushed perfection. NO plastic look.
         
-        LIGHTING must look like REAL PHOTOGRAPHY:
-        - Natural light sources (sun, window, softbox) with realistic shadows and highlights.
-        - Proper light falloff and color temperature.
-        - No flat CG lighting, no unrealistic rim lights, no over-exposed artificial glow.
+        HAIR:
+        - Individual hair strands visible, natural flyaways and baby hairs
+        - Realistic hair texture and shine, proper light reflections
+        - NO smooth blob-like CGI hair
         
-        ENVIRONMENT must look like a REAL LOCATION photographed on-site:
-        - TEXTURES: Authentic materials (real concrete, real marble, real sand, real leaves).
-        - ATMOSPHERE: Real depth, real bokeh, genuine environmental details.
+        EYES:
+        - Natural catchlights reflecting light sources
+        - Realistic iris detail with natural color variation
+        - Visible blood vessels in whites of eyes
+        - NO glassy/dead AI eyes
         
-        AVOID: CGI look, video game aesthetic, plastic appearance, uncanny valley, over-rendered, artificial, AI-generated appearance, unrealistic body proportions.
+        BODY & PROPORTIONS:
+        - Realistic healthy proportions, no elongated limbs
+        - Natural arm/leg thickness with muscle definition
+        - Correct number of fingers (5 per hand), proper joint placement
+        - NO distorted hands, NO extra/missing fingers
+        
+        LIGHTING:
+        - Natural light falloff and shadows
+        - Proper color temperature matching environment
+        - Realistic rim lighting if present
+        - NO flat CG lighting
+        
+        OVERALL: The image must look like it was captured by a professional photographer with a DSLR camera, NOT generated by AI.
       `.trim();
 
-      // STUDIO RUNOUT PREVENTION - Applies when Studio Grey or Clean Studio is selected
+      // STUDIO RUNOUT PREVENTION-Applies when Studio Grey or Clean Studio is selected
       const isStudioSetting = selectedSetting?.id === 'studio-grey' || selectedSetting?.id === 'clean-studio';
       const studioRunoutNote = isStudioSetting ? `
         STUDIO BACKDROP REQUIREMENT (ABSOLUTELY CRITICAL):
@@ -410,7 +390,7 @@ const App: React.FC = () => {
         The image must look like it was cropped from the center of a massive studio with no edges visible.
       `.trim() : '';
 
-      // ENVIRONMENT LIGHTING INTEGRATION - For exterior/location settings
+      // ENVIRONMENT LIGHTING INTEGRATION-For exterior/location settings
       const isExteriorSetting = selectedSetting?.id && !isStudioSetting;
       const environmentLightingNote = isExteriorSetting ? `
         ENVIRONMENT LIGHTING INTEGRATION (CRITICAL):
@@ -426,8 +406,18 @@ const App: React.FC = () => {
       if (preserveOriginal) {
         // Mode: Preserve original subject/bg, just change camera params
         fullPrompt = `
-          COMPOSITION INSTRUCTION: Generate a ${framingLabel} shot.
-          CAMERA ANGLE: ${detailedAngle}.
+          ⚠️ CAMERA ANGLE (CRITICAL-MUST BE RESPECTED):
+          ${detailedAngle}
+          - If LOW ANGLE is specified, the camera MUST be positioned BELOW the subject, shooting UPWARD.
+          - If HIGH ANGLE is specified, the camera MUST be positioned ABOVE the subject, shooting DOWNWARD.
+          - If EYE LEVEL is specified, the camera MUST be at the subject's eye height, shooting STRAIGHT.
+          
+          ⚠️ FRAMING/CROP (CRITICAL-MUST BE RESPECTED):
+          ${framingLabel}
+          - If WIDE is selected, the output MUST show FULL BODY from head to feet.
+          - If MEDIUM is selected, the output MUST show approximately waist-up or three-quarter body.
+          - If CLOSE-UP is selected, the output MUST show only upper body/chest area.
+          
           SUBJECT POSE: The model should be ${poseLabel}.
           
           TASK: Editorial fashion photography. Retain the EXACT subject, clothing, and background from the input image.
@@ -438,11 +428,8 @@ const App: React.FC = () => {
           
           ${productPriorityNote}
           
-          ${highFidelityMode
-            ? highFiStyle
-            : `CRITICAL OUTPUT REQUIREMENT: Generate a BORDERLESS, FULL-BLEED image with NO FRAMES. The photograph must fill the entire canvas edge-to-edge. NO film borders, NO film strips, NO sprocket holes, NO Kodak/Portra film frames, NO date stamps, NO margins of any color.
-           STYLE INSPIRATION ONLY (do NOT add film frames): Natural light aesthetic inspired by 35mm film photography. Authentic skin texture, candid movement, subtle grain.`
-          }
+          CRITICAL OUTPUT REQUIREMENT: Generate a BORDERLESS, FULL-BLEED image with NO FRAMES. The photograph must fill the entire canvas edge-to-edge. NO film borders, NO film strips, NO sprocket holes, NO Kodak/Portra film frames, NO date stamps, NO margins of any color.
+           STYLE INSPIRATION ONLY (do NOT add film frames): Natural light aesthetic inspired by 35mm film photography. Authentic skin texture, candid movement, subtle grain.
           
           ${photoRealismNote}
           
@@ -456,19 +443,75 @@ const App: React.FC = () => {
         const shouldUseConsistency = !!(savedReferenceModel && modelBase64);
 
         fullPrompt = `
-           COMPOSITION INSTRUCTION: Create a ${framingLabel} fashion shot.
-           CAMERA ANGLE: ${detailedAngle}.
+           🚫 ABSOLUTE RULE-NO BORDERS OF ANY KIND:
+           This image MUST be 100% BORDERLESS and FULL-BLEED.
+           - NO film borders, NO Kodak borders, NO Portra borders
+           - NO sprocket holes, NO film strip edges
+           - NO white margins, NO black margins, NO colored borders
+           - NO date stamps, NO film frame overlays
+           - The photograph must fill the ENTIRE canvas edge-to-edge with the actual scene.
+           If you add ANY border or frame, THE ENTIRE IMAGE IS REJECTED.
+           
+           ⚠️ CAMERA ANGLE (CRITICAL-MUST BE RESPECTED):
+           ${detailedAngle}
+           - If LOW ANGLE is specified, the camera MUST be positioned BELOW the subject, shooting UPWARD.
+           - If HIGH ANGLE is specified, the camera MUST be positioned ABOVE the subject, shooting DOWNWARD.
+           - If EYE LEVEL is specified, the camera MUST be at the subject's eye height, shooting STRAIGHT.
+           - This is NOT optional. The angle MUST be visually obvious in the output.
+           
+           ⚠️ FRAMING/CROP (CRITICAL-MUST BE RESPECTED):
+           ${framingLabel}
+           - If WIDE is selected, the output MUST show FULL BODY from head to feet.
+           - If MEDIUM is selected, the output MUST show approximately waist-up or three-quarter body.
+           - If CLOSE-UP is selected, the output MUST show only upper body/chest area.
+           - The framing MUST match the instruction. Do NOT default to full body if medium/close-up was requested.
            
            TASK: Editorial fashion photography.
            Generate a raw, authentic photo of ${shouldUseConsistency ? 'the SPECIFIED MODEL' : 'the TARGET MODEL'} wearing the garment shown in the reference image.
            
            ${shouldUseConsistency
-            ? `CHARACTER CONSISTENCY (FACE/BODY ONLY): Use the identity of the model in the provided second reference image.
-               CRITICAL RULE: You MUST IGNORE the pose, background, clothing, and lighting of the reference model image.
-               - Extract ONLY the facial features and body type.
-               - Place this model into the NEW pose and NEW environment defined below.
-               - The output must be a COMPLETELY NEW image, NOT a copy of the reference.`
-            : `TARGET MODEL: ${selectedAvatar?.description || 'A fashion model'}.`
+            ? `⚠️ CHARACTER CONSISTENCY (IDENTITY EXTRACTION ONLY):
+               FROM THE MODEL REFERENCE, EXTRACT ONLY THESE 3 THINGS:
+               ✅ Face (shape, features, skin tone, expression type)
+               ✅ Hair (color, general style/texture)
+               ✅ Body (height, build, proportions)
+               
+               ⛔ COMPLETELY IGNORE EVERYTHING ELSE FROM THE MODEL REFERENCE:
+               ❌ Pose → CREATE NEW: ${poseLabel}
+               ❌ Background/walls/floor → CREATE NEW: ${selectedSetting?.name || 'specified environment'}
+               ❌ Clothing → USE ONLY: Product from INPUT IMAGE
+               ❌ Camera angle → CREATE NEW: ${detailedAngle}
+               ❌ Framing/crop → CREATE NEW: ${framingLabel}
+               ❌ Lighting setup (softboxes, windows, rim lights) → CREATE NEW: Lighting for ${selectedSetting?.name}
+               ❌ Shadows and reflections → CREATE NEW for the new environment
+               ❌ Props and furniture → CREATE NEW or none
+               
+               🚨 ENVIRONMENT CONTAMINATION WARNING:
+               The model reference may show studio lights, windows, or specific lighting.
+               DO NOT copy these into the output.
+               The output environment should be "${selectedSetting?.name}" - a completely different space.
+               
+               🚨 THIS IS A NEW PHOTOSHOOT, NOT AN EDIT:
+               Imagine you hired this model for a NEW shoot in "${selectedSetting?.name}".
+               The model walks in, the photographer sets up NEW lighting, the model takes a NEW pose.
+               The reference photo does not exist in this new shoot.
+               
+               POSE DEFINITIONS:
+               - STANDING: Model on feet, upright posture, weight even
+               - WALKING: Mid-stride, one foot forward, dynamic
+               - SITTING: Seated on floor/stool/chair
+               - LEANING: Against wall or column
+               - GENERIC: Any natural pose
+               
+               ⚠️ FINAL VERIFICATION (ALL MUST BE YES):
+               1. Is the model doing "${poseLabel}"? (Not copied from reference)
+               2. Is camera at "${selectedAngle}" angle? (Not copied)
+               3. Is framing "${selectedFraming}"? (Not copied)
+               4. Is garment from INPUT image? (Not from model reference)
+               5. Is background "${selectedSetting?.name}"? (Not from model reference)
+               6. Is lighting appropriate for "${selectedSetting?.name}"? (NO windows/lights from model reference)
+               If ANY answer is NO, regenerate.`
+            : `TARGET MODEL: ${buildModelDescription()}`
           }
            
            POSE: ${poseLabel}.
@@ -477,15 +520,9 @@ const App: React.FC = () => {
            
            SETTING: ${selectedSetting?.description}.
            
-           ${highFidelityMode
-            ? highFiStyle
-            : 'CRITICAL OUTPUT REQUIREMENT: Generate a BORDERLESS, FULL-BLEED image with NO FRAMES. NO film borders, NO film strips, NO sprocket holes, NO Kodak/Portra film frames, NO date stamps, NO margins. STYLE INSPIRATION ONLY: Natural light aesthetic inspired by 35mm film photography with subtle grain.'
-          }
+           CRITICAL OUTPUT REQUIREMENT: Generate a BORDERLESS, FULL-BLEED image with NO FRAMES. NO film borders, NO film strips, NO sprocket holes, NO Kodak/Portra film frames, NO date stamps, NO margins. STYLE INSPIRATION ONLY: Natural light aesthetic inspired by 35mm film photography with subtle grain.
            
-           ${highFidelityMode
-            ? highFiAvoid
-            : 'Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text, watermarks, branding, CGI, airbrushed, plastic skin.'
-          }
+           Avoid: ANY borders, frames, film strips, film sprockets, date stamps, film edges, white margins, black margins, text, watermarks, branding, CGI, airbrushed, plastic skin.
            
            ${photoRealismNote}
            
@@ -493,6 +530,8 @@ const App: React.FC = () => {
            ${environmentLightingNote}
            
            ${customPrompt ? `ADDITIONAL INSTRUCTIONS: ${customPrompt}` : ''}
+           
+           REMINDER-CAMERA ANGLE: The output MUST be shot from ${detailedAngle}. This is mandatory.
            
            IMPORTANT: IMAGE MUST BE 100% BORDERLESS. NO FILM FRAMES. NO KODAK BORDERS.
          `.trim();
@@ -515,7 +554,6 @@ const App: React.FC = () => {
         timestamp: Date.now(),
         ratio: targetRatio,
         originalImage: uploadedImage,
-        avatarId: preserveOriginal ? undefined : (savedReferenceModel ? undefined : selectedAvatar?.id),
         modelId: savedReferenceModel?.id,
         settingId: preserveOriginal ? undefined : selectedSetting?.id,
         cameraAngle: selectedAngle,
@@ -570,7 +608,7 @@ const App: React.FC = () => {
     setStatus('generating');
 
     const variationPrompt = `
-      STRICT OUTPAINTING TASK - FILL THE ENTIRE CANVAS.
+      STRICT OUTPAINTING TASK-FILL THE ENTIRE CANVAS.
       
       Goal: Extend the background to fill aspect ratio ${targetRatio}.
       
@@ -584,15 +622,7 @@ const App: React.FC = () => {
       2. PRESERVE COLOR: The output MUST Match the input's color grade 100%. NO TINT.
       3. PIXEL-PERFECT SUBJECT: The central model/product must remain unchanged.
       
-      PRODUCT INTEGRITY (NON-NEGOTIABLE):
-      The product (garment, accessory, shoes) must be reproduced with EXACT fidelity:
-      - EXACT COLOR, EXACT TEXTURE, EXACT PATTERN.
-      - EXACT FIT & SILHOUETTE (ABSOLUTE PRIORITY): The cut from the reference is IMMUTABLE.
-        - UNIVERSAL CONSISTENCY: Regardless of the aspect ratio change, the garment's shape must remain identical.
-        - If it is loose/oversized, it MUST look loose/oversized.
-        - If it is tapered/structural, it MUST look tapered/structural.
-      - NATURAL INTEGRATION: It must drape naturally on the model.
-      - EXACT VOLUME: Maintain the fabric weight and drape.
+      ${PRODUCT_INTEGRITY_PROMPT}
       
       RULES:
       1. EXTEND THE ENVIRONMENT: Continue the pattern of the floor/wall/background seamlessly to the new edges.
@@ -603,17 +633,14 @@ const App: React.FC = () => {
     `.trim();
 
     try {
-      let modelBase64: string | undefined;
-      if (savedReferenceModel) {
-        modelBase64 = await modelLibrary.getModelImageBase64(savedReferenceModel.image_url) || undefined;
-      }
-
+      // NOTE: For variations/resize, we do NOT pass the model reference image.
+      // We are only extending/cropping the EXISTING generated image.
       const generatedImages = await generateFashionAssets(
         activeAsset.imageUrl,
         variationPrompt,
         targetRatio,
         1, // Explicitly 1 for strict variation
-        modelBase64
+        undefined // No model reference for resize operations
       );
 
       const newAssets: GeneratedAsset[] = generatedImages.map((img, index) => ({
@@ -700,7 +727,7 @@ const App: React.FC = () => {
 
     // Define notes locally for Refine scope using activeAsset.settingId
     const photoRealismNote = `
-        PHOTOREALISM (CRITICAL - APPLIES TO EVERYTHING):
+        PHOTOREALISM (CRITICAL-APPLIES TO EVERYTHING):
         MODEL must look like a REAL PERSON photographed with a camera:
         - SKIN: Natural texture with visible pores, fine lines. No plastic skin.
         - HAIR: Natural texture with individual strands. No smooth CGI hair.
@@ -734,68 +761,125 @@ const App: React.FC = () => {
     const poseLabel = MODEL_POSES.find(p => p.id === refinePose)?.label || 'standing';
     const detailedAngle = getDetailedAngleDescription(refineAngle);
 
+    // CHANGE DETECTION: Compare current asset settings with requested refine settings
+    const currentAngle = activeAsset.cameraAngle || 'eye-level';
+    const currentFraming = activeAsset.cameraFraming || 'medium';
+    const currentPose = activeAsset.modelPose || 'standing';
+
+    const angleChanged = refineAngle !== currentAngle;
+    const framingChanged = refineFraming !== currentFraming;
+    const poseChanged = refinePose !== currentPose;
+
+    const anyChangeRequested = angleChanged || framingChanged || poseChanged;
+
+    // Build dynamic change instructions
+    const buildChangeInstructions = () => {
+      const changes: string[] = [];
+      const preserves: string[] = [];
+
+      if (angleChanged) {
+        changes.push(`🔄 CHANGE CAMERA ANGLE: From current to ${detailedAngle}
+         - LOW ANGLE: Camera BELOW subject, shooting UPWARD
+         - HIGH ANGLE: Camera ABOVE subject, shooting DOWNWARD  
+         - EYE LEVEL: Camera at subject's eye height, shooting STRAIGHT`);
+      } else {
+        preserves.push(`✅ KEEP ANGLE SAME: Maintain the EXACT same camera angle as the input image`);
+      }
+
+      if (framingChanged) {
+        const needsOutpainting = (currentFraming === 'close-up' && refineFraming !== 'close-up') ||
+          (currentFraming === 'medium' && refineFraming === 'wide');
+
+        changes.push(`🔄 VIRTUAL CAMERA MOVE-CHANGE FRAMING: From ${currentFraming} to ${smartFraming}
+         - WIDE = Show FULL BODY (Head to Toe) + Environment. if zooming out, outpaint the missing legs/floor.
+         - MEDIUM = Show WAIST UP. if zooming in from Wide, CROP OUT the legs and lower body.
+         - CLOSE-UP = Show HEAD & SHOULDERS ONLY. if zooming in from Medium/Wide, CROP OUT the torso/legs.
+         
+         ${needsOutpainting
+            ? '⚠️ ACTION: OUTPAINTING. Camera moves BACK. You must GENERATE missing body parts (legs/feet) and floor to fill the wider frame.'
+            : '⚠️ ACTION: CROPPING/ZOOM. Camera moves CLOSER. You must DISCARD the outer parts of the image (legs, background edges) and FOCUS on the target area.'}`);
+      } else {
+        preserves.push(`✅ KEEP FRAMING SAME: The camera distance is fixed.`);
+      }
+
+      if (poseChanged) {
+        changes.push(`🔄 CHANGE POSE: From current to ${poseLabel}
+         - STANDING: On feet, upright posture
+         - SITTING: Seated on surface
+         - LEANING: Against wall or column
+         - WALKING: Mid-stride, dynamic movement`);
+      } else {
+        preserves.push(`✅ KEEP POSE SAME: Maintain the EXACT same pose.`);
+      }
+
+      return { changes, preserves };
+    };
+
+    const { changes, preserves } = buildChangeInstructions();
+
     const refinePrompt = `
-      RE-SHOOT TASK: Create a NEW photograph with DIFFERENT camera settings.
+
+      SELECTIVE REFINEMENT TASK: Modify ONLY the specified aspects while preserving everything else.
       
-      ⚠️ THESE ARE THE CHANGES - THE OUTPUT MUST BE DIFFERENT FROM THE INPUT:
+      🚫 ABSOLUTE RULE-NO BORDERS:
+      This image MUST be 100 % BORDERLESS.NO film borders, NO Kodak borders, NO margins.
       
-      1. CAMERA ANGLE → ${detailedAngle}
-         The camera position MUST change. Shoot from ${detailedAngle}.
-         
-      2. FRAMING/ZOOM → ${smartFraming}
-         The crop MUST change. Frame the shot as ${smartFraming}.
-         If this is tighter than the input (e.g., "waist up" from a full body), ZOOM IN.
-         If this is wider than the input, ZOOM OUT.
-         
-      3. MODEL POSE → ${poseLabel}
-         The pose MUST change to ${poseLabel}.
+      ⚠️ CRITICAL-WHAT TO PRESERVE(DO NOT CHANGE THESE):
+- The BACKGROUND / ENVIRONMENT must remain EXACTLY THE SAME(unless cropping requires removing edges)
+  - The MODEL IDENTITY(face, hair, body) must remain EXACTLY THE SAME
+    - The PRODUCT / GARMENT must remain EXACTLY THE SAME
+      - ALL PROPS the model is interacting with (chairs, stools, walls, objects they are leaning on) MUST be preserved
       
-      THE OUTPUT IMAGE MUST VISUALLY DIFFER FROM THE INPUT based on the above.
-      If the input is low-angle and I requested eye-level, the output MUST be eye-level.
-      If the input is wide and I requested close-up, the output MUST be cropped closer.
+      🎨 STUDIO FLOOR RULE(VERY IMPORTANT):
+      If this is a studio shot with a colored backdrop(brown, grey, white, etc):
+- The FLOOR must be the SAME COLOR as the backdrop(infinite cyclorama)
+  - A brown backdrop = brown floor(the model is standing on the seamless paper)
+    - Do NOT add concrete, hardwood, or different flooring
+      - Studio backdrops are seamless-wall and floor are the same color
+      
+      ${preserves.map(p => `      ${p}`).join('\n')}
+      
+      ${anyChangeRequested ? `
+      🔄 WHAT TO CHANGE (ONLY THESE):
+      ${changes.map(c => `      ${c}`).join('\n\n')}
+      ` : 'NO CHANGES REQUESTED-output should match input exactly.'
+      }
+      
+      ⛔ VERIFICATION:
+      Before finalizing, verify:
+      ${angleChanged ? `- Is the camera angle NOW "${detailedAngle}"? (MUST BE DIFFERENT from input)` : '- Is the camera angle UNCHANGED from input? (MUST BE SAME)'}
+      ${framingChanged ? `- Is the framing NOW "${smartFraming}"? (MUST BE DIFFERENT from input)` : '- Is the framing UNCHANGED from input? (MUST BE SAME)'}
+      ${poseChanged ? `- Is the pose NOW "${poseLabel}"? (MUST BE DIFFERENT from input)` : '- Is the pose UNCHANGED from input? (MUST BE SAME)'}
+      If any verification fails, regenerate.
       
       ———————————————————————
-      PRODUCT INTEGRITY (NON-NEGOTIABLE):
-      The product (garment, accessory, shoes) must be reproduced with EXACT fidelity:
-      - EXACT COLOR, EXACT TEXTURE, EXACT PATTERN.
-      - EXACT FIT & SILHOUETTE (ABSOLUTE PRIORITY): The cut from the reference is IMMUTABLE.
-        - UNIVERSAL CONSISTENCY: Regardless of the new angle/pose, the garment's shape must remain identical.
-        - If it is loose/oversized, it MUST look loose/oversized.
-        - If it is tapered/structural, it MUST look tapered/structural.
-      - NATURAL INTEGRATION: It must drape naturally on the model.
-      - EXACT VOLUME: Maintain the fabric weight and drape.
-      
-      PRESERVE:
-      - Same model identity (face, body)
-      - Similar environment aesthetic
+      ———————————————————————
+      ${PRODUCT_INTEGRITY_PROMPT}
+      ———————————————————————
       
       ${photoRealismNote}
       
       ${studioRunoutNote}
       ${environmentLightingNote}
       ———————————————————————
-      
-      FINAL OUTPUT: A fashion photo shot from ${detailedAngle} angle with ${smartFraming} framing, model in ${poseLabel} pose.
-      
-      IMPORTANT: IMAGE MUST BE 100% BORDERLESS. NO FILM FRAMES. NO KODAK BORDERS.
     `.trim();
 
     try {
-      let modelBase64: string | undefined;
-      if (savedReferenceModel) {
-        modelBase64 = await modelLibrary.getModelImageBase64(savedReferenceModel.image_url) || undefined;
-      }
-
+      // NOTE: For refinement, we do NOT pass the model reference image.
+      // Refinement should only modify the CURRENT preview image (change angle/pose/framing).
+      // Passing the model reference would cause the AI to recreate based on the reference
+      // instead of just adjusting the existing generated image.
       const generatedImages = await generateFashionAssets(
         activeAsset.imageUrl,
         refinePrompt,
         activeAsset.ratio, // Keep current ratio
         1, // Explicitly 1 for strict refinement
-        modelBase64
+        undefined // No model reference for refine operations
       );
 
       const newAssets: GeneratedAsset[] = generatedImages.map((img, index) => ({
-        id: `${Date.now()}-${index}-refine`,
+        id: `${Date.now()
+          } -${index} -refine`,
         imageUrl: img,
         prompt: refinePrompt,
         timestamp: Date.now(),
@@ -873,17 +957,13 @@ const App: React.FC = () => {
       const model = models.find(m => m.id === asset.modelId);
       if (model) {
         setSavedReferenceModel(model);
-        setSelectedAvatar(null);
       }
     } else {
       setSavedReferenceModel(null);
     }
 
-    if (asset.avatarId && !asset.modelId) {
-      const avatar = AVATARS.find(a => a.id === asset.avatarId);
-      if (avatar) setSelectedAvatar(avatar);
-      setPreserveOriginal(false);
-    } else if (!asset.modelId) {
+    // Always use Model Builder (not avatars) - just set preserve mode appropriately
+    if (!asset.modelId) {
       setPreserveOriginal(true);
     } else {
       setPreserveOriginal(false);
@@ -925,7 +1005,7 @@ const App: React.FC = () => {
   const handleBulkDelete = async () => {
     if (selectedAssetIds.size === 0) return;
 
-    if (window.confirm(`Are you sure you want to delete ${selectedAssetIds.size} images? This cannot be undone.`)) {
+    if (window.confirm(`Are you sure you want to delete ${selectedAssetIds.size} images ? This cannot be undone.`)) {
       // 1. Optimistic Update
       const idsToDelete = Array.from(selectedAssetIds);
       setGeneratedAssets(prev => prev.filter(a => !selectedAssetIds.has(a.id)));
@@ -961,7 +1041,7 @@ const App: React.FC = () => {
   const handleDownload = async (asset: GeneratedAsset) => {
     try {
       let downloadUrl = asset.imageUrl;
-      let filename = `lumiere-${asset.id}.png`;
+      let filename = `lumiere - ${asset.id}.png`;
 
       // 1. Check Upscale
       if (shouldUpscale) {
@@ -969,7 +1049,7 @@ const App: React.FC = () => {
         try {
           // Upscale returns a data-URI (base64) from UpscalerJS
           downloadUrl = await upscaleImage(asset.imageUrl, "2x");
-          filename = `lumiere-${asset.id}-upscaled.png`;
+          filename = `lumiere - ${asset.id} -upscaled.png`;
         } catch (error) {
           console.error("Upscale failed:", error);
           alert("Upscaling failed. Downloading original instead.");
@@ -1057,7 +1137,7 @@ const App: React.FC = () => {
       let productNameBottomY = textY;
       if (overlayProductName) {
         const fontSize = Math.round(img.width * 0.04 * fontScale);
-        ctx.font = `700 ${fontSize}px ${fontFamilyStr}`;
+        ctx.font = `700 ${fontSize}px ${fontFamilyStr} `;
         ctx.fillStyle = overlayTextColor;
 
         // Split into lines ONLY if > 16 chars
@@ -1084,7 +1164,7 @@ const App: React.FC = () => {
       let subheaderBottomY = productNameBottomY;
       if (overlaySubheader) {
         const subheaderSize = Math.round(img.width * 0.025 * fontScale);
-        ctx.font = `400 ${subheaderSize}px ${fontFamilyStr}`;
+        ctx.font = `400 ${subheaderSize}px ${fontFamilyStr} `;
         ctx.fillStyle = overlayTextColor;
 
         // Spacing logic
@@ -1106,11 +1186,11 @@ const App: React.FC = () => {
 
         if (overlayOriginalPrice && overlaySalePrice) {
           ctx.save();
-          ctx.font = `400 ${priceSize}px ${fontFamilyStr}`;
+          ctx.font = `400 ${priceSize}px ${fontFamilyStr} `;
           ctx.fillStyle = overlayTextColor;
           ctx.globalAlpha = 0.6;
 
-          const originalText = `₹${overlayOriginalPrice}`;
+          const originalText = `₹${overlayOriginalPrice} `;
           const originalWidth = ctx.measureText(originalText).width;
           ctx.fillText(originalText, textX, priceY);
           ctx.restore();
@@ -1123,16 +1203,16 @@ const App: React.FC = () => {
           ctx.lineWidth = 2;
           ctx.stroke();
 
-          // Sale price - BOLD
-          ctx.font = `700 ${priceSize * 1.2}px ${fontFamilyStr}`;
+          // Sale price-BOLD
+          ctx.font = `700 ${priceSize * 1.2}px ${fontFamilyStr} `;
           ctx.fillStyle = overlayTextColor;
-          ctx.fillText(`₹${overlaySalePrice}`, textX + originalWidth + 15, priceY);
+          ctx.fillText(`₹${overlaySalePrice} `, textX + originalWidth + 15, priceY);
         } else {
           // ONLY ONE price
           const thePrice = overlaySalePrice || overlayOriginalPrice;
-          ctx.font = `700 ${priceSize}px ${fontFamilyStr}`;
+          ctx.font = `700 ${priceSize}px ${fontFamilyStr} `;
           ctx.fillStyle = overlayTextColor;
-          ctx.fillText(`₹${thePrice}`, textX, priceY);
+          ctx.fillText(`₹${thePrice} `, textX, priceY);
         }
       }
 
@@ -1144,7 +1224,7 @@ const App: React.FC = () => {
         ctx.translate(img.width - padding / 2, img.height / 2);
         ctx.rotate(-Math.PI / 2);
 
-        ctx.font = `400 ${wmSize}px ${fontFamilyStr}`;
+        ctx.font = `400 ${wmSize}px ${fontFamilyStr} `;
         ctx.fillStyle = overlayWatermarkColor;
         ctx.textAlign = 'center';
         ctx.shadowColor = 'rgba(0,0,0,0.3)';
@@ -1156,14 +1236,14 @@ const App: React.FC = () => {
 
       // 8. Export (and optionally upscale) and download
       let finalDataUrl = canvas.toDataURL('image/png');
-      let filename = `lumiere-${asset.id}-ad.png`;
+      let filename = `lumiere - ${asset.id} -ad.png`;
 
       // Upscale if requested
       if (shouldUpscale) {
         setIsUpscaling(true);
         try {
           finalDataUrl = await upscaleImage(finalDataUrl, "2x");
-          filename = `lumiere-${asset.id}-ad-upscaled.png`;
+          filename = `lumiere - ${asset.id} -ad-upscaled.png`;
         } catch (err) {
           console.error("Upscale failed, using original:", err);
         } finally {
@@ -1233,7 +1313,7 @@ const App: React.FC = () => {
                 className={`
                   relative border-2 border-dashed rounded-xl transition-all duration-300 overflow-hidden group mb-3
                   ${uploadedImage ? 'border-brand-700 bg-brand-900 h-40' : 'border-brand-700 hover:border-brand-500 hover:bg-brand-900 cursor-pointer h-32 flex flex-col items-center justify-center'}
-                `}
+  `}
               >
                 <input
                   type="file"
@@ -1269,13 +1349,13 @@ const App: React.FC = () => {
                     ? 'bg-yellow-900/20 border-yellow-600/50 shadow-sm'
                     : 'bg-brand-900 border-brand-800 hover:border-brand-700'
                   }
-                `}
+  `}
               >
                 <div
                   className={`
-                     w-5 h-5 rounded border flex items-center justify-center transition-colors flex-shrink-0
+  w-5 h-5 rounded border flex items-center justify-center transition-colors flex-shrink-0
                      ${preserveOriginal ? 'bg-yellow-500 border-yellow-500' : 'border-brand-600 bg-transparent'}
-                   `}
+  `}
                   onClick={(e) => {
                     e.preventDefault();
                     setPreserveOriginal(!preserveOriginal);
@@ -1284,7 +1364,7 @@ const App: React.FC = () => {
                   {preserveOriginal && <Check size={14} className="text-black" strokeWidth={3} />}
                 </div>
                 <div className="flex flex-col">
-                  <span className={`text-xs font-bold ${preserveOriginal ? 'text-yellow-400' : 'text-brand-200'}`}>
+                  <span className={`text-xs font-bold ${preserveOriginal ? 'text-yellow-400' : 'text-brand-200'} `}>
                     Keep Original Look
                   </span>
                   <span className="text-[10px] text-brand-500 leading-tight">
@@ -1293,32 +1373,7 @@ const App: React.FC = () => {
                 </div>
               </label>
 
-              {/* High Fidelity Mode Toggle */}
-              <label
-                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200 mt-2 ${highFidelityMode
-                  ? 'bg-indigo-500/10 border-indigo-500/30'
-                  : 'bg-white/5 border-white/5 hover:bg-white/10'
-                  }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${highFidelityMode ? 'bg-indigo-500 border-indigo-500' : 'border-white/30'
-                    }`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setHighFidelityMode(!highFidelityMode);
-                  }}
-                >
-                  {highFidelityMode && <Check size={14} className="text-white" strokeWidth={3} />}
-                </div>
-                <div className="flex flex-col">
-                  <span className={`text-xs font-bold ${highFidelityMode ? 'text-indigo-400' : 'text-brand-200'}`}>
-                    Commercial Style
-                  </span>
-                  <span className="text-[10px] text-brand-500 leading-tight">
-                    Clean digital look. No vintage film styling.
-                  </span>
-                </div>
-              </label>
+
 
             </section>
 
@@ -1340,7 +1395,7 @@ const App: React.FC = () => {
                       <button
                         key={pt.id}
                         onClick={() => setSelectedProductType(pt.id)}
-                        className={`flex-1 min-w-[70px] py-1.5 text-[10px] font-medium rounded-md transition-all ${selectedProductType === pt.id ? 'bg-brand-700 text-white shadow-sm' : 'text-brand-500 hover:text-brand-300 hover:bg-brand-900'}`}
+                        className={`flex-1 min-w-[70px] py-1.5 text-[10px] font-medium rounded-md transition-all ${selectedProductType === pt.id ? 'bg-brand-700 text-white shadow-sm' : 'text-brand-500 hover:text-brand-300 hover:bg-brand-900'} `}
                       >
                         {pt.label}
                       </button>
@@ -1358,7 +1413,7 @@ const App: React.FC = () => {
                       <button
                         key={angle.id}
                         onClick={() => setSelectedAngle(angle.id)}
-                        className={`flex-1 min-w-[80px] py-1.5 text-[10px] font-medium rounded-md transition-all ${selectedAngle === angle.id ? 'bg-brand-700 text-white shadow-sm' : 'text-brand-500 hover:text-brand-300 hover:bg-brand-900'}`}
+                        className={`flex-1 min-w-[80px] py-1.5 text-[10px] font-medium rounded-md transition-all ${selectedAngle === angle.id ? 'bg-brand-700 text-white shadow-sm' : 'text-brand-500 hover:text-brand-300 hover:bg-brand-900'} `}
                       >
                         {angle.label}
                       </button>
@@ -1376,7 +1431,7 @@ const App: React.FC = () => {
                       <button
                         key={framing.id}
                         onClick={() => setSelectedFraming(framing.id)}
-                        className={`flex-1 py-1.5 text-[10px] font-medium rounded-md transition-all ${selectedFraming === framing.id ? 'bg-brand-700 text-white shadow-sm' : 'text-brand-500 hover:text-brand-300 hover:bg-brand-900'}`}
+                        className={`flex-1 py-1.5 text-[10px] font-medium rounded-md transition-all ${selectedFraming === framing.id ? 'bg-brand-700 text-white shadow-sm' : 'text-brand-500 hover:text-brand-300 hover:bg-brand-900'} `}
                       >
                         {framing.label}
                       </button>
@@ -1399,7 +1454,7 @@ const App: React.FC = () => {
                             ? 'bg-brand-700 border-brand-600 text-white shadow-sm'
                             : 'bg-brand-950 border-brand-800 text-brand-500 hover:border-brand-600 hover:text-brand-300'
                           }
-                          `}
+  `}
                       >
                         {pose.label}
                       </button>
@@ -1410,49 +1465,109 @@ const App: React.FC = () => {
               </div>
             </section>
 
-            {/* 3. MODEL SELECTION */}
-            <section className={`transition-all duration-300 ${preserveOriginal ? 'opacity-40 grayscale pointer-events-none select-none' : 'opacity-100'}`}>
+            {/* 3. MODEL BUILDER */}
+            <section className={`transition-all duration-300 ${preserveOriginal ? 'opacity-40 grayscale pointer-events-none select-none' : 'opacity-100'} `}>
               <h2 className="text-xs font-bold text-brand-400 uppercase tracking-widest flex items-center gap-2 mb-3">
                 <span className="w-5 h-5 rounded-full bg-brand-800 text-white flex items-center justify-center text-[10px] font-bold">3</span>
-                Select Model
+                Build Model
               </h2>
-              <div className="grid grid-cols-3 gap-2">
-                {AVATARS.map((avatar) => (
-                  <button
-                    key={avatar.id}
-                    onClick={() => {
-                      setSelectedAvatar(avatar);
-                      setSavedReferenceModel(null); // Clear saved model if preset is selected
-                    }}
-                    className={`
-                      relative rounded-lg overflow-hidden aspect-[3/4] border transition-all text-left group bg-brand-800
-                      ${selectedAvatar?.id === avatar.id ? 'border-white ring-1 ring-white/50 shadow-lg z-10' : 'border-brand-800 hover:border-brand-500'}
-                    `}
+
+              {/* Build Model Controls-Disabled when saved model is selected */}
+              <div className={`transition-all duration-300 ${savedReferenceModel ? 'opacity-40 grayscale pointer-events-none select-none' : 'opacity-100'} `}>
+                {savedReferenceModel && (
+                  <p className="text-[10px] text-brand-500 mb-2 italic">Using saved model "{savedReferenceModel.name}" — Builder disabled</p>
+                )}
+
+                {/* Body Type-Segmented Buttons */}
+                <div className="mb-4">
+                  <p className="text-[10px] text-brand-400 mb-1.5 uppercase tracking-wider">Body Type</p>
+                  <div className="flex flex-wrap gap-1">
+                    {BODY_TYPES.map((type) => (
+                      <button
+                        key={type.id}
+                        onClick={() => { setSelectedBodyType(type.id); setSavedReferenceModel(null); }}
+                        className={`px-2 py-1 rounded text-[10px] font-medium border transition-all
+                        ${selectedBodyType === type.id
+                            ? 'bg-white text-brand-950 border-white'
+                            : 'bg-brand-950 border-brand-800 text-brand-500 hover:border-brand-600 hover:text-brand-300'
+                          } `}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Age-Segmented Buttons */}
+                <div className="mb-4">
+                  <p className="text-[10px] text-brand-400 mb-1.5 uppercase tracking-wider">Age</p>
+                  <div className="flex flex-wrap gap-1">
+                    {AGE_RANGES.map((age) => (
+                      <button
+                        key={age.id}
+                        onClick={() => { setSelectedAge(age.id); setSavedReferenceModel(null); }}
+                        className={`px-2 py-1 rounded text-[10px] font-medium border transition-all
+                        ${selectedAge === age.id
+                            ? 'bg-white text-brand-950 border-white'
+                            : 'bg-brand-950 border-brand-800 text-brand-500 hover:border-brand-600 hover:text-brand-300'
+                          } `}
+                      >
+                        {age.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Ethnicity-Dropdown */}
+                <div className="mb-4">
+                  <p className="text-[10px] text-brand-400 mb-1.5 uppercase tracking-wider">Ethnicity</p>
+                  <select
+                    value={selectedEthnicity}
+                    onChange={(e) => { setSelectedEthnicity(e.target.value as Ethnicity); setSavedReferenceModel(null); }}
+                    className="w-full bg-brand-950 border border-brand-800 rounded px-2 py-1.5 text-xs text-brand-300 focus:outline-none focus:border-brand-500"
                   >
-                    <div className="absolute inset-0 bg-brand-800" />
-                    <img
-                      src={avatar.imageUrl}
-                      alt={avatar.name}
-                      className="w-full h-full object-cover relative z-10 opacity-90 group-hover:opacity-100 transition-opacity"
-                    />
+                    {ETHNICITIES.map((eth) => (
+                      <option key={eth.id} value={eth.id}>{eth.label}</option>
+                    ))}
+                  </select>
+                </div>
 
-                    {/* Improved Label Readability */}
-                    <div className="absolute inset-x-0 bottom-0 p-1 z-20">
-                      <div className="bg-black/70 backdrop-blur-[2px] rounded px-1.5 py-1">
-                        <p className="text-[8px] font-semibold text-white leading-none text-center">{avatar.name}</p>
-                      </div>
-                    </div>
+                {/* Hair-Dropdown */}
+                <div className="mb-4">
+                  <p className="text-[10px] text-brand-400 mb-1.5 uppercase tracking-wider">Hair</p>
+                  <select
+                    value={selectedHair}
+                    onChange={(e) => { setSelectedHair(e.target.value as HairStyle); setSavedReferenceModel(null); }}
+                    className="w-full bg-brand-950 border border-brand-800 rounded px-2 py-1.5 text-xs text-brand-300 focus:outline-none focus:border-brand-500"
+                  >
+                    {HAIR_STYLES.map((hair) => (
+                      <option key={hair.id} value={hair.id}>{hair.label}</option>
+                    ))}
+                  </select>
+                </div>
 
-                    {selectedAvatar?.id === avatar.id && (
-                      <div className="absolute top-1 right-1 bg-brand-500 text-white rounded-full p-0.5 shadow-sm z-30">
-                        <Check size={8} strokeWidth={3} />
-                      </div>
-                    )}
-                  </button>
-                ))}
+                {/* Expression-Segmented Buttons */}
+                <div className="mb-4">
+                  <p className="text-[10px] text-brand-400 mb-1.5 uppercase tracking-wider">Expression</p>
+                  <div className="flex flex-wrap gap-1">
+                    {MODEL_EXPRESSIONS.map((expr) => (
+                      <button
+                        key={expr.id}
+                        onClick={() => { setSelectedExpression(expr.id); setSavedReferenceModel(null); }}
+                        className={`px-2 py-1 rounded text-[10px] font-medium border transition-all
+                        ${selectedExpression === expr.id
+                            ? 'bg-white text-brand-950 border-white'
+                            : 'bg-brand-950 border-brand-800 text-brand-500 hover:border-brand-600 hover:text-brand-300'
+                          } `}
+                      >
+                        {expr.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              {/* Saved Model Library Integration */}
+              {/* Saved Model Library-Always Active */}
               <div className="mt-6 pt-6 border-t border-brand-800">
                 <ModelLibrary
                   onSelectModel={handleSelectSavedModel}
@@ -1464,7 +1579,7 @@ const App: React.FC = () => {
             </section>
 
             {/* 4. ENVIRONMENT */}
-            <section className={`transition-all duration-300 ${preserveOriginal ? 'opacity-40 grayscale pointer-events-none select-none' : 'opacity-100'}`}>
+            <section className={`transition-all duration-300 ${preserveOriginal ? 'opacity-40 grayscale pointer-events-none select-none' : 'opacity-100'} `}>
               <h2 className="text-xs font-bold text-brand-400 uppercase tracking-widest flex items-center gap-2 mb-3">
                 <span className="w-5 h-5 rounded-full bg-brand-800 text-white flex items-center justify-center text-[10px] font-bold">4</span>
                 Environment
@@ -1477,7 +1592,7 @@ const App: React.FC = () => {
                     className={`
                       relative rounded-lg overflow-hidden h-20 border transition-all text-left group bg-brand-800
                       ${selectedSetting?.id === setting.id ? 'border-white ring-1 ring-white/50 z-10' : 'border-brand-800 hover:border-brand-500'}
-                    `}
+  `}
                   >
                     <div className="absolute inset-0 bg-brand-800" />
                     <img src={setting.imageUrl} alt={setting.name} className="w-full h-full object-cover relative z-10 opacity-90 group-hover:opacity-100" />
@@ -1512,11 +1627,12 @@ const App: React.FC = () => {
                     key={ratio}
                     onClick={() => setSelectedRatio(ratio)}
                     className={`
-                      px-2.5 py-1.5 rounded-md text-[10px] font-medium border transition-colors
+  px-2.5 py-1.5 rounded-md text-[10px] font-medium border transition-colors
                       ${selectedRatio === ratio
                         ? 'bg-white text-brand-950 border-white shadow-sm'
-                        : 'bg-transparent text-brand-400 border-brand-800 hover:border-brand-600 hover:text-brand-200'}
-                    `}
+                        : 'bg-transparent text-brand-400 border-brand-800 hover:border-brand-600 hover:text-brand-200'
+                      }
+  `}
                   >
                     {RATIO_LABELS[ratio]}
                   </button>
@@ -1546,7 +1662,7 @@ const App: React.FC = () => {
                     className={`px-3 py-1 text-xs rounded font-medium transition-all ${generateCount === num
                       ? 'bg-white text-brand-950'
                       : 'bg-brand-800 text-brand-300 hover:bg-brand-700'
-                      }`}
+                      } `}
                   >
                     {num}
                   </button>
@@ -1557,14 +1673,14 @@ const App: React.FC = () => {
               onClick={() => handleGenerate()}
               disabled={status === 'generating' || !uploadedImage}
               className={`
-                  w-full py-3 rounded-full font-serif font-semibold text-base flex items-center justify-center gap-2 transition-all
+  w-full py-3 rounded-full font-serif font-semibold text-base flex items-center justify-center gap-2 transition-all
                   ${status === 'generating'
                   ? 'bg-brand-800 text-brand-400 cursor-not-allowed'
                   : !uploadedImage
                     ? 'bg-brand-800 text-brand-500 cursor-not-allowed'
                     : 'bg-white text-brand-950 hover:bg-gray-200 hover:scale-[1.02] active:scale-95 shadow-lg'
                 }
-                `}
+  `}
             >
               {status === 'generating' ? (
                 <>
@@ -1591,12 +1707,12 @@ const App: React.FC = () => {
           z-10
         ">
 
-          {/* Main Workspace - SCROLLABLE */}
+          {/* Main Workspace-SCROLLABLE */}
           <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 flex flex-col items-center w-full custom-scrollbar pb-20 md:pb-8">
             {activeAsset ? (
               <div className="w-full max-w-4xl flex flex-col gap-4 animate-in fade-in duration-500">
 
-                {/* Main Image Card - No height restriction, scrollable parent */}
+                {/* Main Image Card-No height restriction, scrollable parent */}
                 <div className="relative group rounded-xl overflow-hidden shadow-2xl shadow-black bg-brand-950 border border-brand-800 self-center max-w-full transition-all duration-500">
                   <img
                     src={activeAsset.imageUrl}
@@ -1609,9 +1725,9 @@ const App: React.FC = () => {
                     <button
                       onClick={() => toggleShortlist(activeAsset.id)}
                       className={`
-                          p-2 md:p-3 rounded-full shadow-lg backdrop-blur-md transition-all flex items-center justify-center hover:scale-110 active:scale-95
+  p-2 md: p-3 rounded-full shadow-lg backdrop-blur-md transition-all flex items-center justify-center hover: scale-110 active: scale-95
                           ${activeAsset.isShortlisted ? 'bg-brand-500 text-white' : 'bg-white/90 text-brand-950'}
-                        `}
+  `}
                     >
                       <Heart size={18} fill={activeAsset.isShortlisted ? "currentColor" : "none"} />
                     </button>
@@ -1640,12 +1756,6 @@ const App: React.FC = () => {
                         <span className="text-[10px] text-brand-300 font-medium whitespace-nowrap">Upscale (2x)</span>
                       </label>
                     </div>
-                    <button
-                      onClick={() => handleRemix(activeAsset)}
-                      className="px-4 py-2 bg-brand-800 text-white rounded-lg hover:bg-brand-700 font-medium text-xs flex items-center gap-2 transition-colors"
-                    >
-                      <Edit3 size={14} /> Remix
-                    </button>
                   </div>
 
                   <div className="flex items-center gap-2 overflow-x-auto">
@@ -1720,7 +1830,7 @@ const App: React.FC = () => {
                       <Type size={12} className="text-brand-400" />
                       <span className="text-[10px] font-bold text-brand-300 uppercase tracking-widest">Ad Creative</span>
                     </div>
-                    <ChevronDown size={14} className={`text-brand-400 transition-transform ${showOverlayPanel ? 'rotate-180' : ''}`} />
+                    <ChevronDown size={14} className={`text-brand-400 transition-transform ${showOverlayPanel ? 'rotate-180' : ''} `} />
                   </button>
 
                   {showOverlayPanel && (
@@ -1810,19 +1920,19 @@ const App: React.FC = () => {
                             {/* Small */}
                             <button
                               onClick={() => setOverlayFontSize('small')}
-                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'small' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'small' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'} `}
                             >Sm</button>
                             <div className="w-[1px] bg-brand-800"></div>
                             {/* Medium */}
                             <button
                               onClick={() => setOverlayFontSize('medium')}
-                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'medium' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'medium' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'} `}
                             >Md</button>
                             <div className="w-[1px] bg-brand-800"></div>
                             {/* Large */}
                             <button
                               onClick={() => setOverlayFontSize('large')}
-                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'large' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'}`}
+                              className={`flex-1 py-1.5 text-[10px] font-medium transition-colors ${overlayFontSize === 'large' ? 'bg-brand-700 text-white' : 'text-brand-400 hover:text-brand-200'} `}
                             >Lg</button>
                           </div>
                         </div>
@@ -1858,7 +1968,7 @@ const App: React.FC = () => {
                               <button
                                 key={color}
                                 onClick={() => setOverlayTextColor(color)}
-                                className={`w-4 h-4 rounded-full border border-gray-600 ${overlayTextColor === color ? 'ring-2 ring-brand-400 scale-110' : ''}`}
+                                className={`w-4 h-4 rounded-full border border-gray-600 ${overlayTextColor === color ? 'ring-2 ring-brand-400 scale-110' : ''} `}
                                 style={{ backgroundColor: color }}
                               />
                             ))}
@@ -1877,9 +1987,9 @@ const App: React.FC = () => {
                           <div className="flex gap-1">
                             {['#ffffff', '#000000', '#f5f5dc', '#1e293b'].map((color) => (
                               <button
-                                key={`wm-${color}`}
+                                key={`wm - ${color} `}
                                 onClick={() => setOverlayWatermarkColor(color)}
-                                className={`w-4 h-4 rounded-full border border-gray-600 ${overlayWatermarkColor === color ? 'ring-2 ring-brand-400 scale-110' : ''}`}
+                                className={`w-4 h-4 rounded-full border border-gray-600 ${overlayWatermarkColor === color ? 'ring-2 ring-brand-400 scale-110' : ''} `}
                                 style={{ backgroundColor: color }}
                               />
                             ))}
@@ -1921,7 +2031,7 @@ const App: React.FC = () => {
                 <div className="md:hidden flex justify-between gap-2 overflow-x-auto pb-2">
                   <a
                     href={activeAsset.imageUrl}
-                    download={`lumiere-${activeAsset.id}.png`}
+                    download={`lumiere - ${activeAsset.id}.png`}
                     className="px-3 py-2 bg-white text-brand-950 rounded-lg shadow-lg text-[10px] font-bold flex items-center gap-1 whitespace-nowrap"
                   >
                     <Download size={10} /> Save
@@ -1959,13 +2069,13 @@ const App: React.FC = () => {
               <div className="flex items-center">
                 <button
                   onClick={() => setActiveTab('all')}
-                  className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'all' ? 'border-brand-400 text-white' : 'border-transparent text-brand-500 hover:text-brand-300'}`}
+                  className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'all' ? 'border-brand-400 text-white' : 'border-transparent text-brand-500 hover:text-brand-300'} `}
                 >
                   <History size={12} /> Session ({generatedAssets.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('shortlist')}
-                  className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'shortlist' ? 'border-brand-400 text-white' : 'border-transparent text-brand-500 hover:text-brand-300'}`}
+                  className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'shortlist' ? 'border-brand-400 text-white' : 'border-transparent text-brand-500 hover:text-brand-300'} `}
                 >
                   <Heart size={12} /> Shortlist ({generatedAssets.filter(a => a.isShortlisted).length})
                 </button>

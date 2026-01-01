@@ -12,6 +12,13 @@ export type CameraFraming = 'wide' | 'medium' | 'close-up';
 export type ModelPose = 'generic' | 'standing' | 'walking' | 'sitting' | 'leaning';
 export type ProductType = 'top' | 'bottom' | 'full-outfit' | 'accessory';
 
+// Model Builder Types
+export type BodyType = 'petite' | 'slim' | 'athletic' | 'curvy' | 'tall';
+export type AgeRange = '20s' | '30s' | '40s' | '50+';
+export type Ethnicity = 'south-asian' | 'east-asian' | 'black' | 'latina' | 'caucasian' | 'middle-eastern';
+export type HairStyle = 'long-straight' | 'long-wavy' | 'natural-curly' | 'short-pixie' | 'braids';
+export type ModelExpression = 'editorial' | 'soft-romantic' | 'bold-confident' | 'playful';
+
 export interface AvatarPreset {
   id: string;
   name: string;
