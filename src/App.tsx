@@ -303,7 +303,7 @@ const App: React.FC = () => {
           'close-up': 'upper body shot focusing on outfit coordination, fabric details, and styling'
         },
         'accessory': {
-          'wide': 'lifestyle shot showing the accessory in context with the model',
+          'wide': 'FULL BODY shot from head to toe, showing the accessory within the complete outfit context',
           'medium': 'product-focused shot with the accessory as the clear focal point',
           'close-up': 'detailed product shot highlighting the accessory texture, material, and craftsmanship'
         }
@@ -534,6 +534,8 @@ const App: React.FC = () => {
            
            REMINDER-CAMERA ANGLE: The output MUST be shot from ${detailedAngle}. This is mandatory.
            
+           REMINDER-FRAMING: The output MUST be ${framingLabel}. Match this framing exactly.
+           
            IMPORTANT: IMAGE MUST BE 100% BORDERLESS. NO FILM FRAMES. NO KODAK BORDERS.
          `.trim();
       }
@@ -716,7 +718,7 @@ const App: React.FC = () => {
           'close-up': 'upper body'
         },
         'accessory': {
-          'wide': 'lifestyle context',
+          'wide': 'full body head to toe',
           'medium': 'product focus',
           'close-up': 'product detail'
         }
