@@ -241,7 +241,7 @@ const App: React.FC = () => {
     switch (angle) {
       case 'eye-level': return "EYE LEVEL, camera positioned at the subject's eye height, looking STRAIGHT at them. No tilt.";
       case 'low-angle': return "LOW ANGLE, camera positioned BENEATH the subject's eye level, looking UP at them.";
-      case 'high-angle': return "EXTREME HIGH ANGLE, camera placed SIGNIFICANTLY ABOVE the subject looking DOWN at them. Bird's-eye perspective. The floor must be clearly visible behind/around the subject.";
+      case 'high-angle': return "HIGH ANGLE, camera positioned ABOVE the subject, tilted DOWN looking at them.";
       case 'side-angle': return "SIDE PROFILE, 90-degree lateral view of the subject, profile silhouette";
       default: return "EYE LEVEL, camera at subject's eye height, horizontally straight";
     }
@@ -781,10 +781,20 @@ const App: React.FC = () => {
       const preserves: string[] = [];
 
       if (angleChanged) {
+        let moveInstruction = '';
+        if (currentAngle === 'low-angle' && (refineAngle === 'eye-level' || refineAngle === 'high-angle')) {
+          moveInstruction = '⬆️ CAMERA MOVES UP: The camera must physically move UPWARD from the low position.';
+        } else if (currentAngle === 'high-angle' && (refineAngle === 'eye-level' || refineAngle === 'low-angle')) {
+          moveInstruction = '⬇️ CAMERA MOVES DOWN: The camera must physically move DOWNWARD from the high position.';
+        } else if (currentAngle === 'eye-level') {
+          moveInstruction = refineAngle === 'high-angle' ? '⬆️ CAMERA MOVES UP above subject.' : '⬇️ CAMERA MOVES DOWN below subject.';
+        }
+
         changes.push(`🔄 CHANGE CAMERA ANGLE: From current to ${detailedAngle}
+         ${moveInstruction}
          - LOW ANGLE: Camera BELOW subject, shooting UPWARD
          - HIGH ANGLE: Camera ABOVE subject, shooting DOWNWARD  
-         - EYE LEVEL: Camera at subject's eye height, shooting STRAIGHT`);
+         - EYE LEVEL: Camera at subject's eye height, shooting STRAIGHT. NOT tilted up/down.`);
       } else {
         preserves.push(`✅ KEEP ANGLE SAME: Maintain the EXACT same camera angle as the input image`);
       }
